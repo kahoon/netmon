@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kahoon/netmon/internal/model"
+	"github.com/kahoon/netmon/internal/trace"
 	"github.com/miekg/dns"
 )
 
@@ -83,6 +84,7 @@ func (c UpstreamCollector) probeRootDNS(ctx context.Context, network string) mod
 
 	for _, target := range rootTargets {
 		probe := c.queryRootNS(ctx, network, target)
+		emitProbeTrace(ctx, "root", network, target.Name, "", probe)
 		if probe.OK() {
 			return probe
 		}
@@ -132,6 +134,7 @@ func (c UpstreamCollector) probeRecursiveDNS(ctx context.Context, network string
 	for _, resolver := range resolvers {
 		for _, target := range rootTargets {
 			probe := c.queryExpectedAddress(ctx, network, qtype, resolver, target)
+			emitProbeTrace(ctx, "recursive", network, target.Name, resolver.Provider, probe)
 			if probe.OK() {
 				return probe
 			}
@@ -181,6 +184,7 @@ func (c UpstreamCollector) observePublicIP(ctx context.Context, network string, 
 
 	for _, provider := range providers {
 		observation := c.queryPublicIP(ctx, network, provider)
+		emitObservationTrace(ctx, network, provider.Provider, observation)
 		if observation.OK() {
 			return observation
 		}
@@ -400,4 +404,41 @@ func formatObservationFailure(observation model.PublicIPObservation) string {
 		return label
 	}
 	return fmt.Sprintf("%s: %s", label, observation.Detail)
+}
+
+func emitProbeTrace(ctx context.Context, kind, network, target, provider string, probe model.DNSProbeResult) {
+	trace.EmitProbeResult(ctx, trace.ProbeResultFields{
+		Kind:      kind,
+		Family:    familyFromNetwork(network),
+		Target:    target,
+		Provider:  provider,
+		Status:    probe.Status.String(),
+		Latency:   probe.Latency,
+		Responder: probe.Target,
+		Detail:    probe.Detail,
+	})
+}
+
+func emitObservationTrace(ctx context.Context, network, provider string, observation model.PublicIPObservation) {
+	trace.EmitProbeResult(ctx, trace.ProbeResultFields{
+		Kind:     "public_ip",
+		Family:   familyFromNetwork(network),
+		Provider: provider,
+		Target:   observation.Target,
+		Status:   map[bool]string{true: "ok", false: "failed"}[observation.OK()],
+		Latency:  observation.Latency,
+		Detail:   observation.Detail,
+		IP:       observation.IP,
+	})
+}
+
+func familyFromNetwork(network string) string {
+	switch network {
+	case "udp4", "tcp4":
+		return "ipv4"
+	case "udp6", "tcp6":
+		return "ipv6"
+	default:
+		return network
+	}
 }

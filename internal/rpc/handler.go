@@ -3,12 +3,14 @@ package rpc
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/http"
 	"slices"
 	"time"
 
 	"github.com/kahoon/netmon/internal/model"
 	"github.com/kahoon/netmon/internal/monitor"
+	"github.com/kahoon/netmon/internal/trace"
 	netmonv1 "github.com/kahoon/netmon/proto/netmon/v1"
 	netmonv1connect "github.com/kahoon/netmon/proto/netmon/v1/netmonv1connect"
 
@@ -78,6 +80,37 @@ func (h *Handler) WatchTasks(ctx context.Context, _ *connect.Request[netmonv1.Wa
 			if err := stream.Send(&netmonv1.WatchTasksResponse{
 				Event: mapTaskEvent(event),
 			}); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (h *Handler) Trace(ctx context.Context, req *connect.Request[netmonv1.TraceRequest], stream *connect.ServerStream[netmonv1.TraceResponse]) error {
+	scope, err := mapRefreshScope(req.Msg.GetScope())
+	if err != nil {
+		return connect.NewError(connect.CodeInvalidArgument, err)
+	}
+
+	sink := trace.NewChannelSink(ctx, 128)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- h.svc.Trace(ctx, scope, sink)
+		sink.Close()
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-sink.Events():
+			if !ok {
+				if err := <-errCh; err != nil {
+					return err
+				}
+				return nil
+			}
+			if err := stream.Send(&netmonv1.TraceResponse{Event: mapTraceEvent(event)}); err != nil {
 				return err
 			}
 		}
@@ -216,6 +249,19 @@ func mapTaskEvent(event monitor.TaskEvent) *netmonv1.TaskEvent {
 	}
 	if event.Duration != 0 {
 		out.Duration = durationpb.New(event.Duration)
+	}
+	return out
+}
+
+func mapTraceEvent(event trace.Event) *netmonv1.TraceEvent {
+	out := &netmonv1.TraceEvent{
+		TraceId: event.TraceID,
+		Kind:    event.Kind,
+		Message: event.Message,
+		Fields:  maps.Clone(event.Fields),
+	}
+	if !event.At.IsZero() {
+		out.At = timestamppb.New(event.At)
 	}
 	return out
 }

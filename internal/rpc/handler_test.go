@@ -9,6 +9,7 @@ import (
 	connect "connectrpc.com/connect"
 	"github.com/kahoon/netmon/internal/model"
 	"github.com/kahoon/netmon/internal/monitor"
+	"github.com/kahoon/netmon/internal/trace"
 	netmonv1 "github.com/kahoon/netmon/proto/netmon/v1"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -41,6 +42,9 @@ func (f *fakeService) WatchTasks(context.Context) (monitor.TaskSubscription, err
 }
 func (f *fakeService) GetState(context.Context) (model.SystemState, error) { return f.state, nil }
 func (f *fakeService) GetInfo(context.Context) (monitor.Info, error)       { return f.info, nil }
+func (f *fakeService) Trace(context.Context, monitor.RefreshScope, trace.Sink) error {
+	return nil
+}
 func (f *fakeService) Refresh(_ context.Context, scope monitor.RefreshScope) error {
 	f.refreshScope = scope
 	return f.refreshErr

@@ -4,7 +4,7 @@ GOARCH ?= amd64
 BUF ?= $(shell go env GOPATH)/bin/buf
 VERSION ?= dev
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
-BUILD_TIME ?= $(shell date +%Y-%m-%dT%H:%M:%S%z)
+BUILD_TIME ?= $(shell date +%Y-%m-%dT%H:%M:%S%z | sed 's/..$$/:&/')
 
 LDFLAGS := -X github.com/kahoon/netmon/internal/version.Version=$(VERSION) \
 	-X github.com/kahoon/netmon/internal/version.Commit=$(COMMIT) \

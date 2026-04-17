@@ -9,6 +9,7 @@ import (
 	"github.com/kahoon/netmon/internal/collector"
 	"github.com/kahoon/netmon/internal/config"
 	"github.com/kahoon/netmon/internal/model"
+	"github.com/kahoon/netmon/internal/trace"
 	"github.com/kahoon/pending"
 )
 
@@ -42,7 +43,7 @@ func NewMonitor(cfg config.Config) *Monitor {
 		listenerCollector:    collector.ListenerCollector{},
 		upstreamCollector:    collector.UpstreamCollector{ProbeTimeout: cfg.DNSProbeTimeout},
 		debug:                cfg.DebugEvents,
-		startedAt:            time.Now().UTC(),
+		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
 
 		statusBroadcaster: newBroadcaster[StatusView](
@@ -110,7 +111,9 @@ func (m *Monitor) CurrentLinkIndex() int {
 }
 
 func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
-	state, err := m.interfaceCollector.Collect(m.cfg.MonitorInterface)
+	state, err := trace.TraceCollector(ctx, "interface", reason, func(context.Context) (model.InterfaceState, error) {
+		return m.interfaceCollector.Collect(m.cfg.MonitorInterface)
+	})
 	if err != nil {
 		m.notifyError(ctx, reason, err)
 		return err
@@ -124,7 +127,9 @@ func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
 }
 
 func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
-	state, err := m.listenerCollector.Collect()
+	state, err := trace.TraceCollector(ctx, "listeners", reason, func(context.Context) (model.ListenerState, error) {
+		return m.listenerCollector.Collect()
+	})
 	if err != nil {
 		m.notifyError(ctx, reason, err)
 		return err
@@ -138,7 +143,12 @@ func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
 }
 
 func (m *Monitor) RefreshUpstream(ctx context.Context, reason string) error {
-	state := m.upstreamCollector.Collect(ctx)
+	state, err := trace.TraceCollector(ctx, "upstream", reason, func(context.Context) (model.UpstreamState, error) {
+		return m.upstreamCollector.Collect(ctx), nil
+	})
+	if err != nil {
+		return err
+	}
 
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Upstream = state
@@ -166,8 +176,12 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 		m.broadcastStatus(nextView)
 	}
 
+	changed := changedCheckCount(previousChecks, nextChecks)
+	trace.EmitChecksChanged(ctx, reason, changed)
+
 	note := BuildChangeNotification(m.cfg, reason, previousState, nextState, previousChecks, nextChecks)
 	if note == nil {
+		trace.EmitNotificationSkipped(ctx, "no effective changes")
 		return
 	}
 
@@ -177,6 +191,7 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 	}
 
 	log.Printf("notification sent: %s", note.Title)
+	trace.EmitNotificationSent(ctx, note.Title, note.Severity.String())
 }
 
 func (m *Monitor) notifyError(ctx context.Context, reason string, err error) {
@@ -205,4 +220,15 @@ func (m *Monitor) subscribeTasks() TaskSubscription {
 
 func (m *Monitor) broadcastTaskEvent(event TaskEvent) {
 	m.taskBroadcaster.Broadcast(event)
+}
+
+func changedCheckCount(previous, current model.CheckSet) int {
+	count := 0
+	for _, key := range model.CheckOrder() {
+		if previous[key].Equal(current[key]) {
+			continue
+		}
+		count++
+	}
+	return count
 }

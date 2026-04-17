@@ -1,0 +1,176 @@
+package trace
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+)
+
+const (
+	EventTraceStarted        = "trace_started"
+	EventRefreshRequested    = "refresh_requested"
+	EventCollectorStarted    = "collector_started"
+	EventCollectorFinished   = "collector_finished"
+	EventProbeResult         = "probe_result"
+	EventChecksChanged       = "checks_changed"
+	EventNotificationSent    = "notification_sent"
+	EventNotificationSkipped = "notification_skipped"
+	EventTraceCompleted      = "trace_completed"
+	EventTraceFailed         = "trace_failed"
+)
+
+type Event struct {
+	TraceID string
+	At      time.Time
+	Kind    string
+	Message string
+	Fields  map[string]string
+}
+
+type Sink interface {
+	Emit(Event)
+}
+
+type sinkKey struct{}
+type traceIDKey struct{}
+
+func WithSink(ctx context.Context, sink Sink) context.Context {
+	if sink == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, sinkKey{}, sink)
+}
+
+func WithTraceID(ctx context.Context, traceID string) context.Context {
+	if traceID == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, traceIDKey{}, traceID)
+}
+
+func SinkFromContext(ctx context.Context) Sink {
+	if ctx == nil {
+		return nil
+	}
+	sink, _ := ctx.Value(sinkKey{}).(Sink)
+	return sink
+}
+
+func TraceIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	traceID, _ := ctx.Value(traceIDKey{}).(string)
+	return traceID
+}
+
+func Emit(ctx context.Context, kind, message string, fields map[string]string) {
+	sink := SinkFromContext(ctx)
+	if sink == nil {
+		return
+	}
+
+	cloned := make(map[string]string, len(fields))
+	for key, value := range fields {
+		cloned[key] = value
+	}
+
+	sink.Emit(Event{
+		TraceID: TraceIDFromContext(ctx),
+		At:      time.Now().Local(),
+		Kind:    kind,
+		Message: message,
+		Fields:  cloned,
+	})
+}
+
+func NewTraceID() string {
+	var raw [8]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return time.Now().Local().Format("20060102150405.000000000")
+	}
+	return hex.EncodeToString(raw[:])
+}
+
+func TraceCollector[T any](ctx context.Context, name, reason string, fn func(context.Context) (T, error)) (T, error) {
+	started := time.Now()
+	Emit(ctx, EventCollectorStarted, "collector started", map[string]string{
+		"collector": name,
+		"reason":    reason,
+	})
+
+	value, err := fn(ctx)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+
+	Emit(ctx, EventCollectorFinished, "collector finished", map[string]string{
+		"collector": name,
+		"reason":    reason,
+		"duration":  time.Since(started).String(),
+	})
+	return value, nil
+}
+
+type ProbeResultFields struct {
+	Kind      string
+	Family    string
+	Target    string
+	Provider  string
+	Status    string
+	Latency   time.Duration
+	Responder string
+	Detail    string
+	IP        string
+}
+
+func EmitProbeResult(ctx context.Context, result ProbeResultFields) {
+	fields := map[string]string{
+		"probe_kind": result.Kind,
+		"family":     result.Family,
+		"status":     result.Status,
+	}
+	if result.Target != "" {
+		fields["target"] = result.Target
+	}
+	if result.Provider != "" {
+		fields["provider"] = result.Provider
+	}
+	if result.Responder != "" {
+		fields["responder"] = result.Responder
+	}
+	if result.IP != "" {
+		fields["ip"] = result.IP
+	}
+	if result.Latency != 0 {
+		fields["latency"] = result.Latency.String()
+	}
+	if result.Detail != "" {
+		fields["detail"] = result.Detail
+	}
+
+	Emit(ctx, EventProbeResult, "probe result", fields)
+}
+
+func EmitNotificationSent(ctx context.Context, title, severity string) {
+	Emit(ctx, EventNotificationSent, "notification sent", map[string]string{
+		"title":    title,
+		"severity": severity,
+	})
+}
+
+func EmitNotificationSkipped(ctx context.Context, reason string) {
+	Emit(ctx, EventNotificationSkipped, "notification skipped", map[string]string{
+		"reason": reason,
+	})
+}
+
+func EmitChecksChanged(ctx context.Context, reason string, changed int) {
+	Emit(ctx, EventChecksChanged, "checks evaluated", map[string]string{
+		"reason":  reason,
+		"changed": fmt.Sprintf("%d", changed),
+	})
+}

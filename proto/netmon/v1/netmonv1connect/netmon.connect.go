@@ -41,6 +41,8 @@ const (
 	// NetmonServiceWatchTasksProcedure is the fully-qualified name of the NetmonService's WatchTasks
 	// RPC.
 	NetmonServiceWatchTasksProcedure = "/netmon.v1.NetmonService/WatchTasks"
+	// NetmonServiceTraceProcedure is the fully-qualified name of the NetmonService's Trace RPC.
+	NetmonServiceTraceProcedure = "/netmon.v1.NetmonService/Trace"
 	// NetmonServiceGetStateProcedure is the fully-qualified name of the NetmonService's GetState RPC.
 	NetmonServiceGetStateProcedure = "/netmon.v1.NetmonService/GetState"
 	// NetmonServiceGetInfoProcedure is the fully-qualified name of the NetmonService's GetInfo RPC.
@@ -59,6 +61,7 @@ type NetmonServiceClient interface {
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
 	WatchStatus(context.Context, *connect.Request[v1.WatchStatusRequest]) (*connect.ServerStreamForClient[v1.WatchStatusResponse], error)
 	WatchTasks(context.Context, *connect.Request[v1.WatchTasksRequest]) (*connect.ServerStreamForClient[v1.WatchTasksResponse], error)
+	Trace(context.Context, *connect.Request[v1.TraceRequest]) (*connect.ServerStreamForClient[v1.TraceResponse], error)
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
@@ -93,6 +96,12 @@ func NewNetmonServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			httpClient,
 			baseURL+NetmonServiceWatchTasksProcedure,
 			connect.WithSchema(netmonServiceMethods.ByName("WatchTasks")),
+			connect.WithClientOptions(opts...),
+		),
+		trace: connect.NewClient[v1.TraceRequest, v1.TraceResponse](
+			httpClient,
+			baseURL+NetmonServiceTraceProcedure,
+			connect.WithSchema(netmonServiceMethods.ByName("Trace")),
 			connect.WithClientOptions(opts...),
 		),
 		getState: connect.NewClient[v1.GetStateRequest, v1.GetStateResponse](
@@ -133,6 +142,7 @@ type netmonServiceClient struct {
 	getStatus               *connect.Client[v1.GetStatusRequest, v1.GetStatusResponse]
 	watchStatus             *connect.Client[v1.WatchStatusRequest, v1.WatchStatusResponse]
 	watchTasks              *connect.Client[v1.WatchTasksRequest, v1.WatchTasksResponse]
+	trace                   *connect.Client[v1.TraceRequest, v1.TraceResponse]
 	getState                *connect.Client[v1.GetStateRequest, v1.GetStateResponse]
 	getInfo                 *connect.Client[v1.GetInfoRequest, v1.GetInfoResponse]
 	refresh                 *connect.Client[v1.RefreshRequest, v1.RefreshResponse]
@@ -153,6 +163,11 @@ func (c *netmonServiceClient) WatchStatus(ctx context.Context, req *connect.Requ
 // WatchTasks calls netmon.v1.NetmonService.WatchTasks.
 func (c *netmonServiceClient) WatchTasks(ctx context.Context, req *connect.Request[v1.WatchTasksRequest]) (*connect.ServerStreamForClient[v1.WatchTasksResponse], error) {
 	return c.watchTasks.CallServerStream(ctx, req)
+}
+
+// Trace calls netmon.v1.NetmonService.Trace.
+func (c *netmonServiceClient) Trace(ctx context.Context, req *connect.Request[v1.TraceRequest]) (*connect.ServerStreamForClient[v1.TraceResponse], error) {
+	return c.trace.CallServerStream(ctx, req)
 }
 
 // GetState calls netmon.v1.NetmonService.GetState.
@@ -185,6 +200,7 @@ type NetmonServiceHandler interface {
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
 	WatchStatus(context.Context, *connect.Request[v1.WatchStatusRequest], *connect.ServerStream[v1.WatchStatusResponse]) error
 	WatchTasks(context.Context, *connect.Request[v1.WatchTasksRequest], *connect.ServerStream[v1.WatchTasksResponse]) error
+	Trace(context.Context, *connect.Request[v1.TraceRequest], *connect.ServerStream[v1.TraceResponse]) error
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
@@ -215,6 +231,12 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 		NetmonServiceWatchTasksProcedure,
 		svc.WatchTasks,
 		connect.WithSchema(netmonServiceMethods.ByName("WatchTasks")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netmonServiceTraceHandler := connect.NewServerStreamHandler(
+		NetmonServiceTraceProcedure,
+		svc.Trace,
+		connect.WithSchema(netmonServiceMethods.ByName("Trace")),
 		connect.WithHandlerOptions(opts...),
 	)
 	netmonServiceGetStateHandler := connect.NewUnaryHandler(
@@ -255,6 +277,8 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 			netmonServiceWatchStatusHandler.ServeHTTP(w, r)
 		case NetmonServiceWatchTasksProcedure:
 			netmonServiceWatchTasksHandler.ServeHTTP(w, r)
+		case NetmonServiceTraceProcedure:
+			netmonServiceTraceHandler.ServeHTTP(w, r)
 		case NetmonServiceGetStateProcedure:
 			netmonServiceGetStateHandler.ServeHTTP(w, r)
 		case NetmonServiceGetInfoProcedure:
@@ -284,6 +308,10 @@ func (UnimplementedNetmonServiceHandler) WatchStatus(context.Context, *connect.R
 
 func (UnimplementedNetmonServiceHandler) WatchTasks(context.Context, *connect.Request[v1.WatchTasksRequest], *connect.ServerStream[v1.WatchTasksResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.WatchTasks is not implemented"))
+}
+
+func (UnimplementedNetmonServiceHandler) Trace(context.Context, *connect.Request[v1.TraceRequest], *connect.ServerStream[v1.TraceResponse]) error {
+	return connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.Trace is not implemented"))
 }
 
 func (UnimplementedNetmonServiceHandler) GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error) {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kahoon/netmon/internal/model"
+	"github.com/kahoon/netmon/internal/trace"
 	"github.com/kahoon/netmon/internal/version"
 )
 
@@ -48,6 +49,7 @@ type Service interface {
 	GetState(ctx context.Context) (model.SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
 	Refresh(ctx context.Context, scope RefreshScope) error
+	Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error
 	SetDebug(ctx context.Context, debug bool) error
 	SetRuntimeStatsInterval(ctx context.Context, interval time.Duration) error
 }
@@ -95,23 +97,67 @@ func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 }
 
 func (m *Monitor) Refresh(ctx context.Context, scope RefreshScope) error {
+	return m.refreshWithReason(ctx, scope, "manual refresh")
+}
+
+func (m *Monitor) Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error {
+	ctx = trace.WithSink(ctx, sink)
+	ctx = trace.WithTraceID(ctx, trace.NewTraceID())
+	started := time.Now()
+	trace.Emit(ctx, trace.EventTraceStarted, "trace started", map[string]string{
+		"scope": formatRefreshScope(scope),
+	})
+	trace.Emit(ctx, trace.EventRefreshRequested, "refresh requested", map[string]string{
+		"scope": formatRefreshScope(scope),
+	})
+
+	if err := m.refreshWithReason(ctx, scope, "trace refresh"); err != nil {
+		trace.Emit(ctx, trace.EventTraceFailed, "trace failed", map[string]string{
+			"scope":    formatRefreshScope(scope),
+			"duration": time.Since(started).String(),
+			"error":    err.Error(),
+		})
+		return err
+	}
+
+	trace.Emit(ctx, trace.EventTraceCompleted, "trace completed", map[string]string{
+		"scope":    formatRefreshScope(scope),
+		"duration": time.Since(started).String(),
+	})
+	return nil
+}
+
+func (m *Monitor) refreshWithReason(ctx context.Context, scope RefreshScope, reason string) error {
 	switch scope {
 	case RefreshScopeInterface:
-		return m.RefreshInterface(ctx, "manual refresh")
+		return m.RefreshInterface(ctx, reason)
 	case RefreshScopeListeners:
-		return m.RefreshListeners(ctx, "manual refresh")
+		return m.RefreshListeners(ctx, reason)
 	case RefreshScopeUpstream:
-		return m.RefreshUpstream(ctx, "manual refresh")
+		return m.RefreshUpstream(ctx, reason)
 	case RefreshScopeAll:
 		fallthrough
 	default:
-		if err := m.RefreshInterface(ctx, "manual refresh"); err != nil {
+		if err := m.RefreshInterface(ctx, reason); err != nil {
 			return err
 		}
-		if err := m.RefreshListeners(ctx, "manual refresh"); err != nil {
+		if err := m.RefreshListeners(ctx, reason); err != nil {
 			return err
 		}
-		return m.RefreshUpstream(ctx, "manual refresh")
+		return m.RefreshUpstream(ctx, reason)
+	}
+}
+
+func formatRefreshScope(scope RefreshScope) string {
+	switch scope {
+	case RefreshScopeInterface:
+		return "interface"
+	case RefreshScopeListeners:
+		return "listeners"
+	case RefreshScopeUpstream:
+		return "upstream"
+	default:
+		return "all"
 	}
 }
 

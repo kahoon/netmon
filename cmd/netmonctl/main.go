@@ -123,6 +123,32 @@ func runWatch(spec commandSpec, args []string) {
 	}
 }
 
+func runTrace(spec commandSpec, args []string) {
+	var scopeName string
+	cmd := newCommandContextWithTimeout(spec, args, forever, func(fs *flag.FlagSet) {
+		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream")
+	})
+	defer cmd.cancel()
+
+	scope, err := parseRefreshScope(scopeName)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	stream, err := cmd.client.Trace(cmd.ctx, connect.NewRequest(&netmonv1.TraceRequest{Scope: scope}))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer stream.Close()
+
+	for stream.Receive() {
+		printTraceEvent(stream.Msg().GetEvent())
+	}
+	if err := stream.Err(); err != nil && !isCanceledError(err) {
+		log.Fatal(err)
+	}
+}
+
 func runChecks(spec commandSpec, args []string) {
 	var showAll bool
 	cmd := newCommandContext(spec, args, func(fs *flag.FlagSet) {
@@ -449,6 +475,37 @@ func printTaskEvent(event *netmonv1.TaskEvent) {
 	}
 	if detail := event.GetError(); detail != "" {
 		line += fmt.Sprintf(" error=%s", detail)
+	}
+	fmt.Println(line)
+}
+
+func printTraceEvent(event *netmonv1.TraceEvent) {
+	if event == nil {
+		return
+	}
+
+	timestamp := time.Now().Local()
+	if at := event.GetAt(); at != nil {
+		timestamp = at.AsTime().Local()
+	}
+
+	line := fmt.Sprintf("[%s] %-20s %s", timestamp.Format(time.RFC3339), event.GetKind(), event.GetMessage())
+	if traceID := event.GetTraceId(); traceID != "" {
+		line += " trace_id=" + traceID
+	}
+	fields := event.GetFields()
+	if len(fields) > 0 {
+		keys := make([]string, 0, len(fields))
+		for key := range fields {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		parts := make([]string, 0, len(keys))
+		for _, key := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%s", key, fields[key]))
+		}
+		line += " " + strings.Join(parts, " ")
 	}
 	fmt.Println(line)
 }

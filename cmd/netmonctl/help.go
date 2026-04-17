@@ -15,6 +15,7 @@ type commandSpec struct {
 
 var commandOrder = []string{
 	"status",
+	"trace",
 	"watch",
 	"checks",
 	"state",
@@ -56,6 +57,26 @@ Examples:
   netmonctl watch tasks
 `,
 		run: runWatch,
+	},
+	"trace": {
+		name:    "trace",
+		summary: "Run a traced refresh and stream the causal path end to end.",
+		help: `Run a traced refresh and stream the causal path end to end.
+
+Scopes:
+  all         Trace interface, listeners, and upstream refresh work.
+  interface   Trace only interface collection.
+  listeners   Trace only listener collection.
+  upstream    Trace only upstream probes.
+
+Usage:
+  netmonctl trace [-socket path] [-scope all|interface|listeners|upstream]
+
+Examples:
+  netmonctl trace
+  netmonctl trace -scope upstream
+`,
+		run: runTrace,
 	},
 	"checks": {
 		name:    "checks",

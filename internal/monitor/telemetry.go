@@ -15,7 +15,7 @@ func newPendingTelemetry(m *Monitor) *pendingTelemetry {
 
 func (t *pendingTelemetry) OnScheduled(id string, d time.Duration) {
 	event := TaskEvent{
-		At:    time.Now().UTC(),
+		At:    time.Now().Local(),
 		ID:    id,
 		Kind:  TaskEventScheduled,
 		Delay: d,
@@ -29,7 +29,7 @@ func (t *pendingTelemetry) OnScheduled(id string, d time.Duration) {
 
 func (t *pendingTelemetry) OnRescheduled(id string) {
 	event := TaskEvent{
-		At:   time.Now().UTC(),
+		At:   time.Now().Local(),
 		ID:   id,
 		Kind: TaskEventRescheduled,
 	}
@@ -42,7 +42,7 @@ func (t *pendingTelemetry) OnRescheduled(id string) {
 
 func (t *pendingTelemetry) OnExecuted(id string, duration time.Duration) {
 	event := TaskEvent{
-		At:       time.Now().UTC(),
+		At:       time.Now().Local(),
 		ID:       id,
 		Kind:     TaskEventExecuted,
 		Duration: duration,
@@ -56,7 +56,7 @@ func (t *pendingTelemetry) OnExecuted(id string, duration time.Duration) {
 
 func (t *pendingTelemetry) OnCancelled(id string) {
 	event := TaskEvent{
-		At:   time.Now().UTC(),
+		At:   time.Now().Local(),
 		ID:   id,
 		Kind: TaskEventCancelled,
 	}
@@ -69,7 +69,7 @@ func (t *pendingTelemetry) OnCancelled(id string) {
 
 func (t *pendingTelemetry) OnFailed(id string, err error) {
 	event := TaskEvent{
-		At:    time.Now().UTC(),
+		At:    time.Now().Local(),
 		ID:    id,
 		Kind:  TaskEventFailed,
 		Error: err.Error(),

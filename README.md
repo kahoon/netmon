@@ -168,6 +168,7 @@ The local CLI talks to `netmond` over the Unix domain socket. Typical commands:
 
 ```bash
 netmonctl status
+netmonctl trace
 netmonctl watch
 netmonctl watch tasks
 netmonctl checks
@@ -181,6 +182,40 @@ netmonctl help refresh
 ```
 
 Use `-socket` on any command if you want to override the default socket path.
+
+## Trace
+
+`netmonctl trace` runs a bounded traced refresh and streams the causal path end to end.
+
+Unlike `watch`, which observes ongoing daemon state, `trace` causes a refresh itself and
+then exits when that work completes. It is meant for answering questions like:
+
+- which collectors ran
+- which upstream probes succeeded or failed
+- how checks changed
+- whether a notification was sent or skipped
+- how long the refresh took
+
+Examples:
+
+```bash
+netmonctl trace
+netmonctl trace -scope upstream
+```
+
+Example output:
+
+```text
+[2026-04-17T16:02:11-04:00] trace_started        trace started scope=upstream
+[2026-04-17T16:02:11-04:00] refresh_requested    refresh requested scope=upstream
+[2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream reason=trace refresh
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=12.4ms probe_kind=root responder=192.203.230.10 status=ok target=e.root-servers.net.
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv6 latency=15.1ms probe_kind=public_ip provider=Google status=ok ip=2607:f2c0:... target=2001:4860:4802:32::a
+[2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=upstream duration=58.3ms reason=trace refresh
+[2026-04-17T16:02:11-04:00] checks_changed       checks evaluated changed=1 reason=trace refresh
+[2026-04-17T16:02:11-04:00] notification_skipped notification skipped reason=no effective changes
+[2026-04-17T16:02:11-04:00] trace_completed      trace completed duration=59.0ms scope=upstream
+```
 
 ## Streaming and Live Observability
 
