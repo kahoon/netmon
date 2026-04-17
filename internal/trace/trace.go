@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"maps"
 	"time"
 )
 
@@ -73,9 +74,7 @@ func Emit(ctx context.Context, kind, message string, fields map[string]string) {
 	}
 
 	cloned := make(map[string]string, len(fields))
-	for key, value := range fields {
-		cloned[key] = value
-	}
+	maps.Copy(cloned, fields)
 
 	sink.Emit(Event{
 		TraceID: TraceIDFromContext(ctx),
