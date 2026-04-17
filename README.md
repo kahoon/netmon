@@ -86,18 +86,6 @@ Optional:
 - `MONITOR_IF`
   - interface name to monitor
   - default: `eno1`
-- `ROOT_DNS_V4`
-  - comma-separated IPv4 root server targets for the outbound probe
-  - default: `198.41.0.4,199.9.14.201`
-- `ROOT_DNS_V6`
-  - comma-separated IPv6 root server targets for the outbound probe
-  - default: `2001:503:ba3e::2:30,2001:500:200::b`
-- `PUBLIC_IP_RESOLVER`
-  - resolver used for the public IPv4 observation
-  - default: `208.67.222.222:53`
-- `PUBLIC_IP_NAME`
-  - DNS name used for the public IPv4 observation
-  - default: `myip.opendns.com`
 - `NTFY_HOST`
   - notification host name
   - default: `ntfy.sh`
@@ -114,6 +102,13 @@ Optional:
   - interval for logging Go runtime stats
   - set to `0` to disable the reporter
   - default: `168h`
+
+Upstream probing is pinned in code:
+
+- direct authority-style `NS .` probes go to `e.root-servers.net.` and `j.root-servers.net.`
+- recursive health probes resolve those same root hostnames through public resolvers
+- public IPv4 observation prefers OpenDNS and falls back to Google
+- public IPv6 observation prefers Google and falls back to OpenDNS
 
 If `EXPECTED_ULA` is unset, the ULA check is skipped.
 
@@ -207,7 +202,7 @@ quiet on a stable system and only speaks when something meaningful happens:
 - overall severity changes
 - one or more checks change
 - the health summary changes
-- the observed public IPv4 changes
+- the observed public IPv4 or public IPv6 changes
 
 Example:
 

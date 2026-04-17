@@ -113,6 +113,9 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 	if line := publicIPv4ChangeLine(previous.Upstream.PublicIPv4, current.Upstream.PublicIPv4); line != "" {
 		lines = append(lines, line)
 	}
+	if line := publicIPChangeLine("IPv6", previous.Upstream.PublicIPv6, current.Upstream.PublicIPv6); line != "" {
+		lines = append(lines, line)
+	}
 	if len(lines) == 0 {
 		return nil
 	}
@@ -170,12 +173,16 @@ func changedCheckLines(previousChecks, currentChecks model.CheckSet) []string {
 	return lines
 }
 
-func publicIPv4ChangeLine(previous, current model.PublicIPResult) string {
-	if previous.IPv4 == "" || current.IPv4 == "" || previous.IPv4 == current.IPv4 {
+func publicIPv4ChangeLine(previous, current model.PublicIPObservation) string {
+	return publicIPChangeLine("IPv4", previous, current)
+}
+
+func publicIPChangeLine(label string, previous, current model.PublicIPObservation) string {
+	if previous.IP == "" || current.IP == "" || previous.IP == current.IP {
 		return ""
 	}
 
-	return fmt.Sprintf("public IPv4 changed %s -> %s", previous.IPv4, current.IPv4)
+	return fmt.Sprintf("public %s changed %s -> %s", label, previous.IP, current.IP)
 }
 
 func summarizeChecks(checks model.CheckSet) string {

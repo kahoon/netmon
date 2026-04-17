@@ -4,7 +4,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -12,8 +11,6 @@ import (
 
 const (
 	defaultMonitorInterface     = "eno1"
-	defaultPublicIPResolver     = "208.67.222.222:53"
-	defaultPublicIPName         = "myip.opendns.com"
 	defaultNtfyHost             = "ntfy.sh"
 	defaultNtfyResolver         = "9.9.9.9:53"
 	defaultRPCSocketPath        = "/run/netmon/netmond.sock"
@@ -28,11 +25,6 @@ const (
 
 const DefaultRPCSocketPath = defaultRPCSocketPath
 
-var (
-	defaultRootServersV4 = []string{"192.203.230.10", "192.58.128.30"}
-	defaultRootServersV6 = []string{"2001:500:a8::e", "2001:503:c27::2:30"}
-)
-
 type Config struct {
 	Topic string
 
@@ -40,13 +32,9 @@ type Config struct {
 	ExpectedULA      string
 	DebugEvents      bool
 
-	RootServersV4    []string
-	RootServersV6    []string
-	PublicIPResolver string
-	PublicIPName     string
-	NtfyHost         string
-	NtfyResolver     string
-	RPCSocketPath    string
+	NtfyHost      string
+	NtfyResolver  string
+	RPCSocketPath string
 
 	NetlinkDebounce       time.Duration
 	InterfacePollInterval time.Duration
@@ -63,10 +51,6 @@ func LoadConfig() Config {
 		MonitorInterface: getenvDefault("MONITOR_IF", defaultMonitorInterface),
 		ExpectedULA:      normalizeIPLiteral(getenvDefault("EXPECTED_ULA", "")),
 		DebugEvents:      getenvBool("DEBUG_EVENTS", false),
-		RootServersV4:    getenvList("ROOT_DNS_V4", defaultRootServersV4),
-		RootServersV6:    getenvList("ROOT_DNS_V6", defaultRootServersV6),
-		PublicIPResolver: getenvDefault("PUBLIC_IP_RESOLVER", defaultPublicIPResolver),
-		PublicIPName:     getenvDefault("PUBLIC_IP_NAME", defaultPublicIPName),
 		NtfyHost:         getenvDefault("NTFY_HOST", defaultNtfyHost),
 		NtfyResolver:     getenvDefault("NTFY_RESOLVER", defaultNtfyResolver),
 		RPCSocketPath:    getenvDefault("RPC_SOCKET_PATH", defaultRPCSocketPath),
@@ -95,29 +79,6 @@ func getenvDefault(key, def string) string {
 		return def
 	}
 	return value
-}
-
-func getenvList(key string, defaults []string) []string {
-	value := strings.TrimSpace(os.Getenv(key))
-	if value == "" {
-		return append([]string{}, defaults...)
-	}
-
-	parts := strings.Split(value, ",")
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		normalized := normalizeIPLiteral(part)
-		if normalized == "" {
-			continue
-		}
-		out = append(out, normalized)
-	}
-
-	if len(out) == 0 {
-		return append([]string{}, defaults...)
-	}
-	sort.Strings(out)
-	return slicesCompact(out)
 }
 
 func getenvBool(key string, def bool) bool {
@@ -163,19 +124,4 @@ func normalizeIPLiteral(value string) string {
 		return ip16.String()
 	}
 	return ip.String()
-}
-
-func slicesCompact(in []string) []string {
-	if len(in) == 0 {
-		return nil
-	}
-
-	out := in[:1]
-	for _, value := range in[1:] {
-		if value == out[len(out)-1] {
-			continue
-		}
-		out = append(out, value)
-	}
-	return out
 }

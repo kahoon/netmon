@@ -14,12 +14,12 @@ func TestBuildChangeNotificationCompactBody(t *testing.T) {
 	cfg := config.Config{MonitorInterface: "eno1"}
 	previousState := model.SystemState{
 		Upstream: model.UpstreamState{
-			PublicIPv4: model.PublicIPResult{IPv4: "198.51.100.10"},
+			PublicIPv4: model.PublicIPObservation{IP: "198.51.100.10"},
 		},
 	}
 	currentState := model.SystemState{
 		Upstream: model.UpstreamState{
-			PublicIPv4: model.PublicIPResult{IPv4: "198.51.100.20"},
+			PublicIPv4: model.PublicIPObservation{IP: "198.51.100.20"},
 		},
 	}
 

@@ -26,7 +26,7 @@ var commandOrder = []string{
 var commandRegistry = map[string]commandSpec{
 	"status": {
 		name:    "status",
-		summary: "Show the current overall health summary.",
+		summary: "Show the current overall health summary and observed public IPs.",
 		help: `Show the current overall health summary.
 
 Usage:

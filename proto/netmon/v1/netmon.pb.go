@@ -300,7 +300,8 @@ type GetStatusResponse struct {
 	OverallSeverity Severity               `protobuf:"varint,1,opt,name=overall_severity,json=overallSeverity,proto3,enum=netmon.v1.Severity" json:"overall_severity,omitempty"`
 	Summary         string                 `protobuf:"bytes,2,opt,name=summary,proto3" json:"summary,omitempty"`
 	PublicIpv4      string                 `protobuf:"bytes,3,opt,name=public_ipv4,json=publicIpv4,proto3" json:"public_ipv4,omitempty"`
-	Checks          []*Check               `protobuf:"bytes,4,rep,name=checks,proto3" json:"checks,omitempty"`
+	PublicIpv6      string                 `protobuf:"bytes,4,opt,name=public_ipv6,json=publicIpv6,proto3" json:"public_ipv6,omitempty"`
+	Checks          []*Check               `protobuf:"bytes,5,rep,name=checks,proto3" json:"checks,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -352,6 +353,13 @@ func (x *GetStatusResponse) GetSummary() string {
 func (x *GetStatusResponse) GetPublicIpv4() string {
 	if x != nil {
 		return x.PublicIpv4
+	}
+	return ""
+}
+
+func (x *GetStatusResponse) GetPublicIpv6() string {
+	if x != nil {
+		return x.PublicIpv6
 	}
 	return ""
 }
@@ -879,29 +887,31 @@ func (x *ListenerState) GetResolver5335Udp() *ListenerBinding {
 	return nil
 }
 
-type ProbeResult struct {
+type DnsProbeResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
-	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
-	Responder     string                 `protobuf:"bytes,3,opt,name=responder,proto3" json:"responder,omitempty"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	Latency       *durationpb.Duration   `protobuf:"bytes,5,opt,name=latency,proto3" json:"latency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ProbeResult) Reset() {
-	*x = ProbeResult{}
+func (x *DnsProbeResult) Reset() {
+	*x = DnsProbeResult{}
 	mi := &file_netmon_v1_netmon_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ProbeResult) String() string {
+func (x *DnsProbeResult) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ProbeResult) ProtoMessage() {}
+func (*DnsProbeResult) ProtoMessage() {}
 
-func (x *ProbeResult) ProtoReflect() protoreflect.Message {
+func (x *DnsProbeResult) ProtoReflect() protoreflect.Message {
 	mi := &file_netmon_v1_netmon_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -913,36 +923,53 @@ func (x *ProbeResult) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ProbeResult.ProtoReflect.Descriptor instead.
-func (*ProbeResult) Descriptor() ([]byte, []int) {
+// Deprecated: Use DnsProbeResult.ProtoReflect.Descriptor instead.
+func (*DnsProbeResult) Descriptor() ([]byte, []int) {
 	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{12}
 }
 
-func (x *ProbeResult) GetOk() bool {
+func (x *DnsProbeResult) GetName() string {
 	if x != nil {
-		return x.Ok
+		return x.Name
 	}
-	return false
+	return ""
 }
 
-func (x *ProbeResult) GetDetail() string {
+func (x *DnsProbeResult) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *DnsProbeResult) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *DnsProbeResult) GetDetail() string {
 	if x != nil {
 		return x.Detail
 	}
 	return ""
 }
 
-func (x *ProbeResult) GetResponder() string {
+func (x *DnsProbeResult) GetLatency() *durationpb.Duration {
 	if x != nil {
-		return x.Responder
+		return x.Latency
 	}
-	return ""
+	return nil
 }
 
 type PublicIPObservation struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ipv4          string                 `protobuf:"bytes,1,opt,name=ipv4,proto3" json:"ipv4,omitempty"`
-	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	Provider      string                 `protobuf:"bytes,1,opt,name=provider,proto3" json:"provider,omitempty"`
+	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Ip            string                 `protobuf:"bytes,3,opt,name=ip,proto3" json:"ip,omitempty"`
+	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	Latency       *durationpb.Duration   `protobuf:"bytes,5,opt,name=latency,proto3" json:"latency,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -977,9 +1004,23 @@ func (*PublicIPObservation) Descriptor() ([]byte, []int) {
 	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{13}
 }
 
-func (x *PublicIPObservation) GetIpv4() string {
+func (x *PublicIPObservation) GetProvider() string {
 	if x != nil {
-		return x.Ipv4
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *PublicIPObservation) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *PublicIPObservation) GetIp() string {
+	if x != nil {
+		return x.Ip
 	}
 	return ""
 }
@@ -991,11 +1032,21 @@ func (x *PublicIPObservation) GetDetail() string {
 	return ""
 }
 
+func (x *PublicIPObservation) GetLatency() *durationpb.Duration {
+	if x != nil {
+		return x.Latency
+	}
+	return nil
+}
+
 type UpstreamState struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	DnsV4         *ProbeResult           `protobuf:"bytes,1,opt,name=dns_v4,json=dnsV4,proto3" json:"dns_v4,omitempty"`
-	DnsV6         *ProbeResult           `protobuf:"bytes,2,opt,name=dns_v6,json=dnsV6,proto3" json:"dns_v6,omitempty"`
-	PublicIpv4    *PublicIPObservation   `protobuf:"bytes,3,opt,name=public_ipv4,json=publicIpv4,proto3" json:"public_ipv4,omitempty"`
+	RootV4        *DnsProbeResult        `protobuf:"bytes,1,opt,name=root_v4,json=rootV4,proto3" json:"root_v4,omitempty"`
+	RootV6        *DnsProbeResult        `protobuf:"bytes,2,opt,name=root_v6,json=rootV6,proto3" json:"root_v6,omitempty"`
+	RecursiveV4   *DnsProbeResult        `protobuf:"bytes,3,opt,name=recursive_v4,json=recursiveV4,proto3" json:"recursive_v4,omitempty"`
+	RecursiveV6   *DnsProbeResult        `protobuf:"bytes,4,opt,name=recursive_v6,json=recursiveV6,proto3" json:"recursive_v6,omitempty"`
+	PublicIpv4    *PublicIPObservation   `protobuf:"bytes,5,opt,name=public_ipv4,json=publicIpv4,proto3" json:"public_ipv4,omitempty"`
+	PublicIpv6    *PublicIPObservation   `protobuf:"bytes,6,opt,name=public_ipv6,json=publicIpv6,proto3" json:"public_ipv6,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1030,16 +1081,30 @@ func (*UpstreamState) Descriptor() ([]byte, []int) {
 	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{14}
 }
 
-func (x *UpstreamState) GetDnsV4() *ProbeResult {
+func (x *UpstreamState) GetRootV4() *DnsProbeResult {
 	if x != nil {
-		return x.DnsV4
+		return x.RootV4
 	}
 	return nil
 }
 
-func (x *UpstreamState) GetDnsV6() *ProbeResult {
+func (x *UpstreamState) GetRootV6() *DnsProbeResult {
 	if x != nil {
-		return x.DnsV6
+		return x.RootV6
+	}
+	return nil
+}
+
+func (x *UpstreamState) GetRecursiveV4() *DnsProbeResult {
+	if x != nil {
+		return x.RecursiveV4
+	}
+	return nil
+}
+
+func (x *UpstreamState) GetRecursiveV6() *DnsProbeResult {
+	if x != nil {
+		return x.RecursiveV6
 	}
 	return nil
 }
@@ -1047,6 +1112,13 @@ func (x *UpstreamState) GetDnsV6() *ProbeResult {
 func (x *UpstreamState) GetPublicIpv4() *PublicIPObservation {
 	if x != nil {
 		return x.PublicIpv4
+	}
+	return nil
+}
+
+func (x *UpstreamState) GetPublicIpv6() *PublicIPObservation {
+	if x != nil {
+		return x.PublicIpv6
 	}
 	return nil
 }
@@ -1521,13 +1593,15 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\bseverity\x18\x02 \x01(\x0e2\x13.netmon.v1.SeverityR\bseverity\x12\x18\n" +
 	"\asummary\x18\x03 \x01(\tR\asummary\x12\x16\n" +
 	"\x06detail\x18\x04 \x01(\tR\x06detail\"\x12\n" +
-	"\x10GetStatusRequest\"\xb8\x01\n" +
+	"\x10GetStatusRequest\"\xd9\x01\n" +
 	"\x11GetStatusResponse\x12>\n" +
 	"\x10overall_severity\x18\x01 \x01(\x0e2\x13.netmon.v1.SeverityR\x0foverallSeverity\x12\x18\n" +
 	"\asummary\x18\x02 \x01(\tR\asummary\x12\x1f\n" +
 	"\vpublic_ipv4\x18\x03 \x01(\tR\n" +
-	"publicIpv4\x12(\n" +
-	"\x06checks\x18\x04 \x03(\v2\x10.netmon.v1.CheckR\x06checks\"\x14\n" +
+	"publicIpv4\x12\x1f\n" +
+	"\vpublic_ipv6\x18\x04 \x01(\tR\n" +
+	"publicIpv6\x12(\n" +
+	"\x06checks\x18\x05 \x03(\v2\x10.netmon.v1.CheckR\x06checks\"\x14\n" +
 	"\x12WatchStatusRequest\"K\n" +
 	"\x13WatchStatusResponse\x124\n" +
 	"\x06status\x18\x01 \x01(\v2\x1c.netmon.v1.GetStatusResponseR\x06status\"\x13\n" +
@@ -1563,19 +1637,28 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\tdns53_tcp\x18\x01 \x01(\v2\x1a.netmon.v1.ListenerBindingR\bdns53Tcp\x127\n" +
 	"\tdns53_udp\x18\x02 \x01(\v2\x1a.netmon.v1.ListenerBindingR\bdns53Udp\x12E\n" +
 	"\x10resolver5335_tcp\x18\x03 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Tcp\x12E\n" +
-	"\x10resolver5335_udp\x18\x04 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Udp\"S\n" +
-	"\vProbeResult\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\tR\x06detail\x12\x1c\n" +
-	"\tresponder\x18\x03 \x01(\tR\tresponder\"A\n" +
-	"\x13PublicIPObservation\x12\x12\n" +
-	"\x04ipv4\x18\x01 \x01(\tR\x04ipv4\x12\x16\n" +
-	"\x06detail\x18\x02 \x01(\tR\x06detail\"\xae\x01\n" +
-	"\rUpstreamState\x12-\n" +
-	"\x06dns_v4\x18\x01 \x01(\v2\x16.netmon.v1.ProbeResultR\x05dnsV4\x12-\n" +
-	"\x06dns_v6\x18\x02 \x01(\v2\x16.netmon.v1.ProbeResultR\x05dnsV6\x12?\n" +
-	"\vpublic_ipv4\x18\x03 \x01(\v2\x1e.netmon.v1.PublicIPObservationR\n" +
-	"publicIpv4\"\xb9\x01\n" +
+	"\x10resolver5335_udp\x18\x04 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Udp\"\xa1\x01\n" +
+	"\x0eDnsProbeResult\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x123\n" +
+	"\alatency\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\alatency\"\xa6\x01\n" +
+	"\x13PublicIPObservation\x12\x1a\n" +
+	"\bprovider\x18\x01 \x01(\tR\bprovider\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12\x0e\n" +
+	"\x02ip\x18\x03 \x01(\tR\x02ip\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\x123\n" +
+	"\alatency\x18\x05 \x01(\v2\x19.google.protobuf.DurationR\alatency\"\xf5\x02\n" +
+	"\rUpstreamState\x122\n" +
+	"\aroot_v4\x18\x01 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x06rootV4\x122\n" +
+	"\aroot_v6\x18\x02 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x06rootV6\x12<\n" +
+	"\frecursive_v4\x18\x03 \x01(\v2\x19.netmon.v1.DnsProbeResultR\vrecursiveV4\x12<\n" +
+	"\frecursive_v6\x18\x04 \x01(\v2\x19.netmon.v1.DnsProbeResultR\vrecursiveV6\x12?\n" +
+	"\vpublic_ipv4\x18\x05 \x01(\v2\x1e.netmon.v1.PublicIPObservationR\n" +
+	"publicIpv4\x12?\n" +
+	"\vpublic_ipv6\x18\x06 \x01(\v2\x1e.netmon.v1.PublicIPObservationR\n" +
+	"publicIpv6\"\xb9\x01\n" +
 	"\x10GetStateResponse\x127\n" +
 	"\tinterface\x18\x01 \x01(\v2\x19.netmon.v1.InterfaceStateR\tinterface\x126\n" +
 	"\tlisteners\x18\x02 \x01(\v2\x18.netmon.v1.ListenerStateR\tlisteners\x124\n" +
@@ -1664,7 +1747,7 @@ var file_netmon_v1_netmon_proto_goTypes = []any{
 	(*InterfaceState)(nil),                  // 12: netmon.v1.InterfaceState
 	(*ListenerBinding)(nil),                 // 13: netmon.v1.ListenerBinding
 	(*ListenerState)(nil),                   // 14: netmon.v1.ListenerState
-	(*ProbeResult)(nil),                     // 15: netmon.v1.ProbeResult
+	(*DnsProbeResult)(nil),                  // 15: netmon.v1.DnsProbeResult
 	(*PublicIPObservation)(nil),             // 16: netmon.v1.PublicIPObservation
 	(*UpstreamState)(nil),                   // 17: netmon.v1.UpstreamState
 	(*GetStateResponse)(nil),                // 18: netmon.v1.GetStateResponse
@@ -1693,36 +1776,41 @@ var file_netmon_v1_netmon_proto_depIdxs = []int32{
 	13, // 10: netmon.v1.ListenerState.dns53_udp:type_name -> netmon.v1.ListenerBinding
 	13, // 11: netmon.v1.ListenerState.resolver5335_tcp:type_name -> netmon.v1.ListenerBinding
 	13, // 12: netmon.v1.ListenerState.resolver5335_udp:type_name -> netmon.v1.ListenerBinding
-	15, // 13: netmon.v1.UpstreamState.dns_v4:type_name -> netmon.v1.ProbeResult
-	15, // 14: netmon.v1.UpstreamState.dns_v6:type_name -> netmon.v1.ProbeResult
-	16, // 15: netmon.v1.UpstreamState.public_ipv4:type_name -> netmon.v1.PublicIPObservation
-	12, // 16: netmon.v1.GetStateResponse.interface:type_name -> netmon.v1.InterfaceState
-	14, // 17: netmon.v1.GetStateResponse.listeners:type_name -> netmon.v1.ListenerState
-	17, // 18: netmon.v1.GetStateResponse.upstream:type_name -> netmon.v1.UpstreamState
-	1,  // 19: netmon.v1.RefreshRequest.scope:type_name -> netmon.v1.RefreshScope
-	28, // 20: netmon.v1.SetRuntimeStatsIntervalRequest.interval:type_name -> google.protobuf.Duration
-	28, // 21: netmon.v1.SetRuntimeStatsIntervalResponse.interval:type_name -> google.protobuf.Duration
-	4,  // 22: netmon.v1.NetmonService.GetStatus:input_type -> netmon.v1.GetStatusRequest
-	6,  // 23: netmon.v1.NetmonService.WatchStatus:input_type -> netmon.v1.WatchStatusRequest
-	8,  // 24: netmon.v1.NetmonService.WatchTasks:input_type -> netmon.v1.WatchTasksRequest
-	11, // 25: netmon.v1.NetmonService.GetState:input_type -> netmon.v1.GetStateRequest
-	19, // 26: netmon.v1.NetmonService.GetInfo:input_type -> netmon.v1.GetInfoRequest
-	21, // 27: netmon.v1.NetmonService.Refresh:input_type -> netmon.v1.RefreshRequest
-	25, // 28: netmon.v1.NetmonService.SetDebug:input_type -> netmon.v1.SetDebugRequest
-	23, // 29: netmon.v1.NetmonService.SetRuntimeStatsInterval:input_type -> netmon.v1.SetRuntimeStatsIntervalRequest
-	5,  // 30: netmon.v1.NetmonService.GetStatus:output_type -> netmon.v1.GetStatusResponse
-	7,  // 31: netmon.v1.NetmonService.WatchStatus:output_type -> netmon.v1.WatchStatusResponse
-	10, // 32: netmon.v1.NetmonService.WatchTasks:output_type -> netmon.v1.WatchTasksResponse
-	18, // 33: netmon.v1.NetmonService.GetState:output_type -> netmon.v1.GetStateResponse
-	20, // 34: netmon.v1.NetmonService.GetInfo:output_type -> netmon.v1.GetInfoResponse
-	22, // 35: netmon.v1.NetmonService.Refresh:output_type -> netmon.v1.RefreshResponse
-	26, // 36: netmon.v1.NetmonService.SetDebug:output_type -> netmon.v1.SetDebugResponse
-	24, // 37: netmon.v1.NetmonService.SetRuntimeStatsInterval:output_type -> netmon.v1.SetRuntimeStatsIntervalResponse
-	30, // [30:38] is the sub-list for method output_type
-	22, // [22:30] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	28, // 13: netmon.v1.DnsProbeResult.latency:type_name -> google.protobuf.Duration
+	28, // 14: netmon.v1.PublicIPObservation.latency:type_name -> google.protobuf.Duration
+	15, // 15: netmon.v1.UpstreamState.root_v4:type_name -> netmon.v1.DnsProbeResult
+	15, // 16: netmon.v1.UpstreamState.root_v6:type_name -> netmon.v1.DnsProbeResult
+	15, // 17: netmon.v1.UpstreamState.recursive_v4:type_name -> netmon.v1.DnsProbeResult
+	15, // 18: netmon.v1.UpstreamState.recursive_v6:type_name -> netmon.v1.DnsProbeResult
+	16, // 19: netmon.v1.UpstreamState.public_ipv4:type_name -> netmon.v1.PublicIPObservation
+	16, // 20: netmon.v1.UpstreamState.public_ipv6:type_name -> netmon.v1.PublicIPObservation
+	12, // 21: netmon.v1.GetStateResponse.interface:type_name -> netmon.v1.InterfaceState
+	14, // 22: netmon.v1.GetStateResponse.listeners:type_name -> netmon.v1.ListenerState
+	17, // 23: netmon.v1.GetStateResponse.upstream:type_name -> netmon.v1.UpstreamState
+	1,  // 24: netmon.v1.RefreshRequest.scope:type_name -> netmon.v1.RefreshScope
+	28, // 25: netmon.v1.SetRuntimeStatsIntervalRequest.interval:type_name -> google.protobuf.Duration
+	28, // 26: netmon.v1.SetRuntimeStatsIntervalResponse.interval:type_name -> google.protobuf.Duration
+	4,  // 27: netmon.v1.NetmonService.GetStatus:input_type -> netmon.v1.GetStatusRequest
+	6,  // 28: netmon.v1.NetmonService.WatchStatus:input_type -> netmon.v1.WatchStatusRequest
+	8,  // 29: netmon.v1.NetmonService.WatchTasks:input_type -> netmon.v1.WatchTasksRequest
+	11, // 30: netmon.v1.NetmonService.GetState:input_type -> netmon.v1.GetStateRequest
+	19, // 31: netmon.v1.NetmonService.GetInfo:input_type -> netmon.v1.GetInfoRequest
+	21, // 32: netmon.v1.NetmonService.Refresh:input_type -> netmon.v1.RefreshRequest
+	25, // 33: netmon.v1.NetmonService.SetDebug:input_type -> netmon.v1.SetDebugRequest
+	23, // 34: netmon.v1.NetmonService.SetRuntimeStatsInterval:input_type -> netmon.v1.SetRuntimeStatsIntervalRequest
+	5,  // 35: netmon.v1.NetmonService.GetStatus:output_type -> netmon.v1.GetStatusResponse
+	7,  // 36: netmon.v1.NetmonService.WatchStatus:output_type -> netmon.v1.WatchStatusResponse
+	10, // 37: netmon.v1.NetmonService.WatchTasks:output_type -> netmon.v1.WatchTasksResponse
+	18, // 38: netmon.v1.NetmonService.GetState:output_type -> netmon.v1.GetStateResponse
+	20, // 39: netmon.v1.NetmonService.GetInfo:output_type -> netmon.v1.GetInfoResponse
+	22, // 40: netmon.v1.NetmonService.Refresh:output_type -> netmon.v1.RefreshResponse
+	26, // 41: netmon.v1.NetmonService.SetDebug:output_type -> netmon.v1.SetDebugResponse
+	24, // 42: netmon.v1.NetmonService.SetRuntimeStatsInterval:output_type -> netmon.v1.SetRuntimeStatsIntervalResponse
+	35, // [35:43] is the sub-list for method output_type
+	27, // [27:35] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_netmon_v1_netmon_proto_init() }

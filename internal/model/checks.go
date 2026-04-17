@@ -45,8 +45,8 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, localhostCheck(checkResolver5335UDP, "5335/udp", state.Listeners.Resolver5335UDP))
 	addCheck(checks, exposureCheck(checkExpose5335TCP, "5335/tcp", state.Listeners.Resolver5335TCP))
 	addCheck(checks, exposureCheck(checkExpose5335UDP, "5335/udp", state.Listeners.Resolver5335UDP))
-	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.ExternalDNSV4))
-	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.ExternalDNSV6))
+	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.RootDNSV4, state.Upstream.RecursiveDNSV4))
+	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.RootDNSV6, state.Upstream.RecursiveDNSV6))
 	return checks
 }
 
@@ -190,20 +190,26 @@ func exposureCheck(key, label string, probe SocketProbe) CheckResult {
 	return result
 }
 
-func externalDNSCheck(key, family string, result DNSProbeResult) CheckResult {
+func externalDNSCheck(key, family string, root, recursive DNSProbeResult) CheckResult {
 	check := CheckResult{
 		Key:      key,
 		Label:    "external DNS " + family,
 		Severity: SeverityOK,
 	}
 
-	if result.OK() {
+	if root.OK() && recursive.OK() {
 		return check
 	}
 
-	check.Severity = SeverityWarn
-	check.Summary = fmt.Sprintf("external DNS over %s failing", family)
-	check.Detail = result.Error
+	switch {
+	case root.OK() || recursive.OK():
+		check.Severity = SeverityWarn
+		check.Summary = fmt.Sprintf("external DNS over %s degraded", family)
+	default:
+		check.Severity = SeverityCrit
+		check.Summary = fmt.Sprintf("external DNS over %s failing", family)
+	}
+	check.Detail = fmt.Sprintf("root: %s; recursive: %s", root.Summary(), recursive.Summary())
 	return check
 }
 

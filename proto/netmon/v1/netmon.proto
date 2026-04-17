@@ -56,7 +56,8 @@ message GetStatusResponse {
   Severity overall_severity = 1;
   string summary = 2;
   string public_ipv4 = 3;
-  repeated Check checks = 4;
+  string public_ipv6 = 4;
+  repeated Check checks = 5;
 }
 
 message WatchStatusRequest {}
@@ -107,21 +108,29 @@ message ListenerState {
   ListenerBinding resolver5335_udp = 4;
 }
 
-message ProbeResult {
-  bool ok = 1;
-  string detail = 2;
-  string responder = 3;
+message DnsProbeResult {
+  string name = 1;
+  string target = 2;
+  string status = 3;
+  string detail = 4;
+  google.protobuf.Duration latency = 5;
 }
 
 message PublicIPObservation {
-  string ipv4 = 1;
-  string detail = 2;
+  string provider = 1;
+  string target = 2;
+  string ip = 3;
+  string detail = 4;
+  google.protobuf.Duration latency = 5;
 }
 
 message UpstreamState {
-  ProbeResult dns_v4 = 1;
-  ProbeResult dns_v6 = 2;
-  PublicIPObservation public_ipv4 = 3;
+  DnsProbeResult root_v4 = 1;
+  DnsProbeResult root_v6 = 2;
+  DnsProbeResult recursive_v4 = 3;
+  DnsProbeResult recursive_v6 = 4;
+  PublicIPObservation public_ipv4 = 5;
+  PublicIPObservation public_ipv6 = 6;
 }
 
 message GetStateResponse {

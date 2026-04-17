@@ -22,7 +22,8 @@ func TestGetStatusReturnsOrderedChecks(t *testing.T) {
 	daemon := NewMonitor(config.Config{})
 	daemon.state = model.SystemState{
 		Upstream: model.UpstreamState{
-			PublicIPv4: model.PublicIPResult{IPv4: "203.0.113.10"},
+			PublicIPv4: model.PublicIPObservation{IP: "203.0.113.10"},
+			PublicIPv6: model.PublicIPObservation{IP: "2001:db8::10"},
 		},
 	}
 	daemon.checks = model.CheckSet{
@@ -53,6 +54,9 @@ func TestGetStatusReturnsOrderedChecks(t *testing.T) {
 
 	if got, want := status.PublicIPv4, "203.0.113.10"; got != want {
 		t.Fatalf("GetStatus().PublicIPv4 = %q, want %q", got, want)
+	}
+	if got, want := status.PublicIPv6, "2001:db8::10"; got != want {
+		t.Fatalf("GetStatus().PublicIPv6 = %q, want %q", got, want)
 	}
 
 	if got, want := status.OverallSeverity, model.SeverityCrit; got != want {
@@ -154,7 +158,8 @@ func TestWatchStatusReturnsInitialSnapshotAndUpdates(t *testing.T) {
 	}
 	daemon.state = model.SystemState{
 		Upstream: model.UpstreamState{
-			PublicIPv4: model.PublicIPResult{IPv4: "203.0.113.10"},
+			PublicIPv4: model.PublicIPObservation{IP: "203.0.113.10"},
+			PublicIPv6: model.PublicIPObservation{IP: "2001:db8::10"},
 		},
 	}
 	daemon.checks = model.CheckSet{
@@ -177,6 +182,9 @@ func TestWatchStatusReturnsInitialSnapshotAndUpdates(t *testing.T) {
 		if got, want := initial.PublicIPv4, "203.0.113.10"; got != want {
 			t.Fatalf("initial PublicIPv4 = %q, want %q", got, want)
 		}
+		if got, want := initial.PublicIPv6, "2001:db8::10"; got != want {
+			t.Fatalf("initial PublicIPv6 = %q, want %q", got, want)
+		}
 		if got, want := initial.OverallSeverity, model.SeverityOK; got != want {
 			t.Fatalf("initial OverallSeverity = %s, want %s", got, want)
 		}
@@ -185,13 +193,17 @@ func TestWatchStatusReturnsInitialSnapshotAndUpdates(t *testing.T) {
 	}
 
 	daemon.applyUpdate(context.Background(), "test update", func(current *model.SystemState) {
-		current.Upstream.PublicIPv4 = model.PublicIPResult{IPv4: "203.0.113.27"}
+		current.Upstream.PublicIPv4 = model.PublicIPObservation{IP: "203.0.113.27"}
+		current.Upstream.PublicIPv6 = model.PublicIPObservation{IP: "2001:db8::27"}
 	})
 
 	select {
 	case updated := <-sub.Updates():
 		if got, want := updated.PublicIPv4, "203.0.113.27"; got != want {
 			t.Fatalf("updated PublicIPv4 = %q, want %q", got, want)
+		}
+		if got, want := updated.PublicIPv6, "2001:db8::27"; got != want {
+			t.Fatalf("updated PublicIPv6 = %q, want %q", got, want)
 		}
 	case <-time.After(1 * time.Second):
 		t.Fatal("timed out waiting for changed status update")

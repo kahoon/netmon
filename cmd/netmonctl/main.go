@@ -61,6 +61,9 @@ func runStatus(spec commandSpec, args []string) {
 	if publicIPv4 := resp.Msg.GetPublicIpv4(); publicIPv4 != "" {
 		fmt.Printf("Public IPv4: %s\n", publicIPv4)
 	}
+	if publicIPv6 := resp.Msg.GetPublicIpv6(); publicIPv6 != "" {
+		fmt.Printf("Public IPv6: %s\n", publicIPv6)
+	}
 
 	issues := failingChecks(resp.Msg.GetChecks())
 	if len(issues) == 0 {
@@ -404,13 +407,13 @@ func printState(resp *netmonv1.GetStateResponse) {
 
 	fmt.Println()
 	fmt.Println("Upstream")
-	printProbe("External DNS IPv4", resp.GetUpstream().GetDnsV4())
-	printProbe("External DNS IPv6", resp.GetUpstream().GetDnsV6())
+	printDNSProbe("Root DNS IPv4", resp.GetUpstream().GetRootV4())
+	printDNSProbe("Root DNS IPv6", resp.GetUpstream().GetRootV6())
+	printDNSProbe("Recursive DNS IPv4", resp.GetUpstream().GetRecursiveV4())
+	printDNSProbe("Recursive DNS IPv6", resp.GetUpstream().GetRecursiveV6())
 	publicIPv4 := resp.GetUpstream().GetPublicIpv4()
-	fmt.Printf("  Public IPv4:       %s\n", defaultString(publicIPv4.GetIpv4(), "(unknown)"))
-	if detail := publicIPv4.GetDetail(); detail != "" {
-		fmt.Printf("  Public IPv4 Note:  %s\n", detail)
-	}
+	printPublicIPObservation("Public IPv4", publicIPv4)
+	printPublicIPObservation("Public IPv6", resp.GetUpstream().GetPublicIpv6())
 }
 
 func printWatchStatus(resp *netmonv1.GetStatusResponse) {
@@ -418,6 +421,9 @@ func printWatchStatus(resp *netmonv1.GetStatusResponse) {
 	fmt.Printf("[%s] %-4s %s\n", timestamp, formatSeverity(resp.GetOverallSeverity()), defaultString(resp.GetSummary(), "healthy"))
 	if publicIPv4 := resp.GetPublicIpv4(); publicIPv4 != "" {
 		fmt.Printf("  Public IPv4: %s\n", publicIPv4)
+	}
+	if publicIPv6 := resp.GetPublicIpv6(); publicIPv6 != "" {
+		fmt.Printf("  Public IPv6: %s\n", publicIPv6)
 	}
 	for _, check := range failingChecks(resp.GetChecks()) {
 		fmt.Printf("  - %s: %s\n", check.GetName(), defaultString(check.GetSummary(), "unhealthy"))
@@ -452,10 +458,16 @@ func printListenerBinding(label string, binding *netmonv1.ListenerBinding) {
 	fmt.Printf("  %-12s addresses=%s\n", "", joinOrNone(binding.GetAddresses()))
 }
 
-func printProbe(label string, probe *netmonv1.ProbeResult) {
-	fmt.Printf("  %-18s %s\n", label+":", healthWord(probe.GetOk()))
-	if responder := probe.GetResponder(); responder != "" {
-		fmt.Printf("  %-18s %s\n", "", responder)
+func printDNSProbe(label string, probe *netmonv1.DnsProbeResult) {
+	fmt.Printf("  %-18s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
+	if name := probe.GetName(); name != "" {
+		fmt.Printf("  %-18s %s\n", "", name)
+	}
+	if target := probe.GetTarget(); target != "" {
+		fmt.Printf("  %-18s %s\n", "", target)
+	}
+	if latency := probe.GetLatency(); latency != nil {
+		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
 	}
 	if detail := probe.GetDetail(); detail != "" {
 		fmt.Printf("  %-18s %s\n", "", detail)
@@ -471,11 +483,29 @@ func joinOrNone(values []string) string {
 	return strings.Join(cloned, ", ")
 }
 
-func healthWord(ok bool) string {
-	if ok {
-		return "OK"
+func printPublicIPObservation(label string, observation *netmonv1.PublicIPObservation) {
+	fmt.Printf("  %-18s %s\n", label+":", defaultString(observation.GetIp(), "(unknown)"))
+	if provider := observation.GetProvider(); provider != "" {
+		fmt.Printf("  %-18s provider=%s\n", "", provider)
 	}
-	return "FAIL"
+	if target := observation.GetTarget(); target != "" {
+		fmt.Printf("  %-18s target=%s\n", "", target)
+	}
+	if latency := observation.GetLatency(); latency != nil {
+		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
+	}
+	if detail := observation.GetDetail(); detail != "" {
+		fmt.Printf("  %-18s %s\n", "", detail)
+	}
+}
+
+func formatProbeStatus(status string) string {
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return "UNKNOWN"
+	}
+	status = strings.ReplaceAll(status, "_", " ")
+	return strings.ToUpper(status)
 }
 
 func formatDuration(d time.Duration) string {

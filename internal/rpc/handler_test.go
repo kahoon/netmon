@@ -75,6 +75,7 @@ func TestGetStatusMapsOKSeverity(t *testing.T) {
 				OverallSeverity: model.SeverityOK,
 				Summary:         "healthy",
 				PublicIPv4:      "203.0.113.10",
+				PublicIPv6:      "2001:db8::10",
 				Checks: []model.CheckResult{
 					{
 						Key:      "expected-ula",
@@ -96,6 +97,9 @@ func TestGetStatusMapsOKSeverity(t *testing.T) {
 	}
 	if got, want := resp.Msg.GetChecks()[0].GetSeverity(), netmonv1.Severity_SEVERITY_OK; got != want {
 		t.Fatalf("GetStatus().Checks[0].Severity = %s, want %s", got, want)
+	}
+	if got, want := resp.Msg.GetPublicIpv6(), "2001:db8::10"; got != want {
+		t.Fatalf("GetStatus().PublicIpv6 = %q, want %q", got, want)
 	}
 }
 

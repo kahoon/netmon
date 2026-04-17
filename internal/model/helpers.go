@@ -54,9 +54,12 @@ func CopySystemState(in SystemState) SystemState {
 			Resolver5335UDP: copySocketProbe(in.Listeners.Resolver5335UDP),
 		},
 		Upstream: UpstreamState{
-			ExternalDNSV4: in.Upstream.ExternalDNSV4,
-			ExternalDNSV6: in.Upstream.ExternalDNSV6,
-			PublicIPv4:    in.Upstream.PublicIPv4,
+			RootDNSV4:      in.Upstream.RootDNSV4,
+			RootDNSV6:      in.Upstream.RootDNSV6,
+			RecursiveDNSV4: in.Upstream.RecursiveDNSV4,
+			RecursiveDNSV6: in.Upstream.RecursiveDNSV6,
+			PublicIPv4:     in.Upstream.PublicIPv4,
+			PublicIPv6:     in.Upstream.PublicIPv6,
 		},
 	}
 }

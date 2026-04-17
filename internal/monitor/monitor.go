@@ -36,17 +36,11 @@ type Monitor struct {
 
 func NewMonitor(cfg config.Config) *Monitor {
 	monitor := &Monitor{
-		cfg:                cfg,
-		notifier:           NewNtfyNotifier(cfg),
-		interfaceCollector: collector.InterfaceCollector{},
-		listenerCollector:  collector.ListenerCollector{},
-		upstreamCollector: collector.UpstreamCollector{
-			RootServersV4:    cfg.RootServersV4,
-			RootServersV6:    cfg.RootServersV6,
-			PublicIPResolver: cfg.PublicIPResolver,
-			PublicIPName:     cfg.PublicIPName,
-			ProbeTimeout:     cfg.DNSProbeTimeout,
-		},
+		cfg:                  cfg,
+		notifier:             NewNtfyNotifier(cfg),
+		interfaceCollector:   collector.InterfaceCollector{},
+		listenerCollector:    collector.ListenerCollector{},
+		upstreamCollector:    collector.UpstreamCollector{ProbeTimeout: cfg.DNSProbeTimeout},
 		debug:                cfg.DebugEvents,
 		startedAt:            time.Now().UTC(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
@@ -95,10 +89,15 @@ func (m *Monitor) Initialize(ctx context.Context) error {
 	m.mu.Unlock()
 
 	log.Printf("initial status: %s", summarizeChecks(checks))
-	if state.Upstream.PublicIPv4.IPv4 != "" {
-		log.Printf("initial public IPv4: %s", state.Upstream.PublicIPv4.IPv4)
-	} else if state.Upstream.PublicIPv4.Error != "" {
-		log.Printf("initial public IPv4 lookup failed: %s", state.Upstream.PublicIPv4.Error)
+	if state.Upstream.PublicIPv4.OK() {
+		log.Printf("initial public IPv4: %s", state.Upstream.PublicIPv4.IP)
+	} else if state.Upstream.PublicIPv4.Detail != "" {
+		log.Printf("initial public IPv4 lookup failed: %s", state.Upstream.PublicIPv4.Detail)
+	}
+	if state.Upstream.PublicIPv6.OK() {
+		log.Printf("initial public IPv6: %s", state.Upstream.PublicIPv6.IP)
+	} else if state.Upstream.PublicIPv6.Detail != "" {
+		log.Printf("initial public IPv6 lookup failed: %s", state.Upstream.PublicIPv6.Detail)
 	}
 
 	return nil

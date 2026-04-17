@@ -37,6 +37,7 @@ type StatusView struct {
 	OverallSeverity model.Severity
 	Summary         string
 	PublicIPv4      string
+	PublicIPv6      string
 	Checks          []model.CheckResult
 }
 

@@ -2,6 +2,7 @@ package collector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -17,67 +18,222 @@ const (
 	rootServerSuffix = ".root-servers.net."
 )
 
+type rootTarget struct {
+	Name string
+	IPv4 string
+	IPv6 string
+}
+
+type recursiveResolver struct {
+	Provider string
+	Address  string
+}
+
+type publicIPProvider struct {
+	Provider         string
+	Address          string
+	Name             string
+	Type             uint16
+	Family           int
+	RecursionDesired bool
+}
+
+var rootTargets = []rootTarget{
+	{Name: "e.root-servers.net.", IPv4: "192.203.230.10", IPv6: "2001:500:a8::e"},
+	{Name: "j.root-servers.net.", IPv4: "192.58.128.30", IPv6: "2001:503:c27::2:30"},
+}
+
+var recursiveResolversV4 = []recursiveResolver{
+	{Provider: "OpenDNS", Address: "208.67.222.222"},
+	{Provider: "Google", Address: "8.8.8.8"},
+}
+
+var recursiveResolversV6 = []recursiveResolver{
+	{Provider: "Google", Address: "2001:4860:4860::8888"},
+	{Provider: "OpenDNS", Address: "2620:119:35::35"},
+}
+
+var publicIPv4Providers = []publicIPProvider{
+	{Provider: "OpenDNS", Address: "208.67.222.222", Name: "myip.opendns.com.", Type: dns.TypeA, Family: 4, RecursionDesired: true},
+	{Provider: "Google", Address: "216.239.32.10", Name: "o-o.myaddr.l.google.com.", Type: dns.TypeTXT, Family: 4, RecursionDesired: false},
+}
+
+var publicIPv6Providers = []publicIPProvider{
+	{Provider: "Google", Address: "2001:4860:4802:32::a", Name: "o-o.myaddr.l.google.com.", Type: dns.TypeTXT, Family: 6, RecursionDesired: false},
+	{Provider: "OpenDNS", Address: "2620:119:35::35", Name: "myip.opendns.com.", Type: dns.TypeAAAA, Family: 6, RecursionDesired: true},
+}
+
 type UpstreamCollector struct {
-	RootServersV4 []string
-	RootServersV6 []string
-
-	PublicIPResolver string
-	PublicIPName     string
-
 	ProbeTimeout time.Duration
 }
 
 func (c UpstreamCollector) Collect(ctx context.Context) model.UpstreamState {
 	return model.UpstreamState{
-		ExternalDNSV4: c.probeExternalDNS(ctx, "udp4", c.RootServersV4),
-		ExternalDNSV6: c.probeExternalDNS(ctx, "udp6", c.RootServersV6),
-		PublicIPv4:    c.queryPublicIPv4(ctx),
+		RootDNSV4:      c.probeRootDNS(ctx, "udp4"),
+		RootDNSV6:      c.probeRootDNS(ctx, "udp6"),
+		RecursiveDNSV4: c.probeRecursiveDNS(ctx, "udp4", dns.TypeA, recursiveResolversV4),
+		RecursiveDNSV6: c.probeRecursiveDNS(ctx, "udp6", dns.TypeAAAA, recursiveResolversV6),
+		PublicIPv4:     c.observePublicIP(ctx, "udp4", publicIPv4Providers),
+		PublicIPv6:     c.observePublicIP(ctx, "udp6", publicIPv6Providers),
 	}
 }
 
-func (c UpstreamCollector) probeExternalDNS(ctx context.Context, network string, targets []string) model.DNSProbeResult {
-	var errors []string
+func (c UpstreamCollector) probeRootDNS(ctx context.Context, network string) model.DNSProbeResult {
+	var failures []string
 
-	for _, target := range targets {
-		if err := c.queryRootNS(ctx, target, network); err != nil {
-			errors = append(errors, fmt.Sprintf("%s: %v", target, err))
-			continue
+	for _, target := range rootTargets {
+		probe := c.queryRootNS(ctx, network, target)
+		if probe.OK() {
+			return probe
 		}
-		return model.DNSProbeResult{Target: target}
+		failures = append(failures, formatProbeFailure(probe))
 	}
-	return model.DNSProbeResult{Error: strings.Join(errors, "; ")}
+
+	return model.DNSProbeResult{
+		Status: model.DNSProbeStatusNetworkError,
+		Detail: strings.Join(failures, "; "),
+	}
 }
 
-func (c UpstreamCollector) queryRootNS(ctx context.Context, target, network string) error {
-	probeCtx, cancel := context.WithTimeout(ctx, c.ProbeTimeout)
-	defer cancel()
-
+func (c UpstreamCollector) queryRootNS(ctx context.Context, network string, target rootTarget) model.DNSProbeResult {
 	msg := new(dns.Msg)
 	msg.SetQuestion(dns.Fqdn(dnsRoot), dns.TypeNS)
 	msg.RecursionDesired = false
+
+	host := target.IPv4
+	if network == "udp6" {
+		host = target.IPv6
+	}
+
+	answer, latency, err := c.exchange(ctx, network, host, msg)
+	if err != nil {
+		return model.DNSProbeResult{
+			Name:    target.Name,
+			Target:  host,
+			Status:  classifyExchangeError(err),
+			Latency: latency,
+			Detail:  err.Error(),
+		}
+	}
+
+	status, detail := validateRootNSAnswer(answer)
+	return model.DNSProbeResult{
+		Name:    target.Name,
+		Target:  host,
+		Status:  status,
+		Latency: latency,
+		Detail:  detail,
+	}
+}
+
+func (c UpstreamCollector) probeRecursiveDNS(ctx context.Context, network string, qtype uint16, resolvers []recursiveResolver) model.DNSProbeResult {
+	var failures []string
+
+	for _, resolver := range resolvers {
+		for _, target := range rootTargets {
+			probe := c.queryExpectedAddress(ctx, network, qtype, resolver, target)
+			if probe.OK() {
+				return probe
+			}
+			failures = append(failures, formatProbeFailure(probe))
+		}
+	}
+
+	return model.DNSProbeResult{
+		Status: model.DNSProbeStatusNetworkError,
+		Detail: strings.Join(failures, "; "),
+	}
+}
+
+func (c UpstreamCollector) queryExpectedAddress(ctx context.Context, network string, qtype uint16, resolver recursiveResolver, target rootTarget) model.DNSProbeResult {
+	msg := new(dns.Msg)
+	msg.SetQuestion(target.Name, qtype)
+	msg.RecursionDesired = true
+
+	expected := target.IPv4
+	if qtype == dns.TypeAAAA {
+		expected = target.IPv6
+	}
+
+	answer, latency, err := c.exchange(ctx, network, resolver.Address, msg)
+	if err != nil {
+		return model.DNSProbeResult{
+			Name:    fmt.Sprintf("%s via %s", target.Name, resolver.Provider),
+			Target:  resolver.Address,
+			Status:  classifyExchangeError(err),
+			Latency: latency,
+			Detail:  err.Error(),
+		}
+	}
+
+	status, detail := validateExpectedAddressAnswer(answer, qtype, expected)
+	return model.DNSProbeResult{
+		Name:    fmt.Sprintf("%s via %s", target.Name, resolver.Provider),
+		Target:  resolver.Address,
+		Status:  status,
+		Latency: latency,
+		Detail:  detail,
+	}
+}
+
+func (c UpstreamCollector) observePublicIP(ctx context.Context, network string, providers []publicIPProvider) model.PublicIPObservation {
+	var failures []string
+
+	for _, provider := range providers {
+		observation := c.queryPublicIP(ctx, network, provider)
+		if observation.OK() {
+			return observation
+		}
+		failures = append(failures, formatObservationFailure(observation))
+	}
+
+	return model.PublicIPObservation{
+		Detail: strings.Join(failures, "; "),
+	}
+}
+
+func (c UpstreamCollector) queryPublicIP(ctx context.Context, network string, provider publicIPProvider) model.PublicIPObservation {
+	msg := new(dns.Msg)
+	msg.SetQuestion(provider.Name, provider.Type)
+	msg.RecursionDesired = provider.RecursionDesired
+
+	answer, latency, err := c.exchange(ctx, network, provider.Address, msg)
+	if err != nil {
+		return model.PublicIPObservation{
+			Provider: provider.Provider,
+			Target:   provider.Address,
+			Latency:  latency,
+			Detail:   err.Error(),
+		}
+	}
+
+	ip, detail := extractObservedIP(answer, provider.Type, provider.Family)
+	return model.PublicIPObservation{
+		Provider: provider.Provider,
+		Target:   provider.Address,
+		IP:       ip,
+		Latency:  latency,
+		Detail:   detail,
+	}
+}
+
+func (c UpstreamCollector) exchange(ctx context.Context, network, target string, msg *dns.Msg) (*dns.Msg, time.Duration, error) {
+	probeCtx, cancel := context.WithTimeout(ctx, c.ProbeTimeout)
+	defer cancel()
+
 	client := &dns.Client{
 		Net:     network,
 		Timeout: c.ProbeTimeout,
 	}
-	answer, _, err := client.ExchangeContext(probeCtx, msg, net.JoinHostPort(target, dnsPort))
-	if err != nil {
-		return err
-	}
-	return validateRootNSAnswer(answer)
+
+	answer, latency, err := client.ExchangeContext(probeCtx, msg, net.JoinHostPort(target, dnsPort))
+	return answer, latency, err
 }
 
-func validateRootNSAnswer(answer *dns.Msg) error {
-	if answer == nil {
-		return fmt.Errorf("nil response")
-	}
-	if !answer.Response {
-		return fmt.Errorf("response missing QR bit")
-	}
-	if answer.Rcode != dns.RcodeSuccess {
-		return fmt.Errorf("dns rcode=%d", answer.Rcode)
-	}
-	if len(answer.Answer) == 0 && len(answer.Ns) == 0 && len(answer.Extra) == 0 {
-		return fmt.Errorf("empty response")
+func validateRootNSAnswer(answer *dns.Msg) (model.DNSProbeStatus, string) {
+	status, detail := validateDNSMessage(answer)
+	if status != model.DNSProbeStatusOK {
+		return status, detail
 	}
 
 	for _, rr := range append(append([]dns.RR{}, answer.Answer...), answer.Ns...) {
@@ -89,52 +245,159 @@ func validateRootNSAnswer(answer *dns.Msg) error {
 			continue
 		}
 		if strings.HasSuffix(ns.Ns, rootServerSuffix) {
-			return nil
+			return model.DNSProbeStatusOK, ""
 		}
 	}
-	return fmt.Errorf("response contains no root-server NS records (possible interception)")
+
+	return model.DNSProbeStatusUnexpectedAnswer, "response contains no root-server NS records (possible interception)"
 }
 
-func (c UpstreamCollector) queryPublicIPv4(ctx context.Context) model.PublicIPResult {
-	probeCtx, cancel := context.WithTimeout(ctx, c.ProbeTimeout)
-	defer cancel()
-
-	msg := new(dns.Msg)
-	msg.SetQuestion(dns.Fqdn(c.PublicIPName), dns.TypeA)
-	msg.RecursionDesired = true
-	client := &dns.Client{
-		Net:     "udp4",
-		Timeout: c.ProbeTimeout,
-	}
-	answer, _, err := client.ExchangeContext(probeCtx, msg, model.EnsurePort(c.PublicIPResolver, dnsPort))
-	if err != nil {
-		return model.PublicIPResult{Error: err.Error()}
-	}
-	ipv4, err := extractPublicIPv4(answer)
-	if err != nil {
-		return model.PublicIPResult{Error: err.Error()}
-	}
-	return model.PublicIPResult{IPv4: ipv4}
-}
-
-func extractPublicIPv4(answer *dns.Msg) (string, error) {
-	if answer == nil {
-		return "", fmt.Errorf("nil response")
-	}
-	if !answer.Response {
-		return "", fmt.Errorf("response missing QR bit")
-	}
-	if answer.Rcode != dns.RcodeSuccess {
-		return "", fmt.Errorf("dns rcode=%d", answer.Rcode)
+func validateExpectedAddressAnswer(answer *dns.Msg, qtype uint16, expected string) (model.DNSProbeStatus, string) {
+	status, detail := validateDNSMessage(answer)
+	if status != model.DNSProbeStatusOK {
+		return status, detail
 	}
 	if len(answer.Answer) == 0 {
-		return "", fmt.Errorf("no IPv4 answers")
+		return model.DNSProbeStatusUnexpectedAnswer, "no answers"
+	}
+
+	var got []string
+	for _, rr := range answer.Answer {
+		switch record := rr.(type) {
+		case *dns.A:
+			if qtype != dns.TypeA {
+				continue
+			}
+			ip := record.A.String()
+			got = append(got, ip)
+			if ip == expected {
+				return model.DNSProbeStatusOK, ""
+			}
+		case *dns.AAAA:
+			if qtype != dns.TypeAAAA {
+				continue
+			}
+			ip := record.AAAA.String()
+			got = append(got, ip)
+			if ip == expected {
+				return model.DNSProbeStatusOK, ""
+			}
+		}
+	}
+
+	if len(got) == 0 {
+		return model.DNSProbeStatusUnexpectedAnswer, "no matching address answers"
+	}
+	return model.DNSProbeStatusUnexpectedAnswer, fmt.Sprintf("expected %s, got %s", expected, strings.Join(got, ", "))
+}
+
+func extractObservedIP(answer *dns.Msg, qtype uint16, family int) (string, string) {
+	status, detail := validateDNSMessage(answer)
+	if status != model.DNSProbeStatusOK {
+		return "", detail
+	}
+	if len(answer.Answer) == 0 {
+		return "", "no answers"
 	}
 
 	for _, rr := range answer.Answer {
-		if a, ok := rr.(*dns.A); ok {
-			return a.A.String(), nil
+		switch record := rr.(type) {
+		case *dns.A:
+			if qtype == dns.TypeA {
+				return record.A.String(), ""
+			}
+		case *dns.AAAA:
+			if qtype == dns.TypeAAAA {
+				return record.AAAA.String(), ""
+			}
+		case *dns.TXT:
+			if qtype != dns.TypeTXT {
+				continue
+			}
+			for _, value := range record.Txt {
+				if ip := net.ParseIP(strings.Trim(strings.TrimSpace(value), `"`)); ip != nil && matchesFamily(ip, family) {
+					return ip.String(), ""
+				}
+			}
 		}
 	}
-	return "", fmt.Errorf("no IPv4 answer")
+
+	return "", "no public IP answer"
+}
+
+func matchesFamily(ip net.IP, family int) bool {
+	switch family {
+	case 4:
+		return ip.To4() != nil
+	case 6:
+		return ip.To4() == nil && ip.To16() != nil
+	default:
+		return ip != nil
+	}
+}
+
+func validateDNSMessage(answer *dns.Msg) (model.DNSProbeStatus, string) {
+	if answer == nil {
+		return model.DNSProbeStatusMalformed, "nil response"
+	}
+	if !answer.Response {
+		return model.DNSProbeStatusMalformed, "response missing QR bit"
+	}
+
+	switch answer.Rcode {
+	case dns.RcodeSuccess:
+	case dns.RcodeRefused:
+		return model.DNSProbeStatusRefused, "dns rcode=REFUSED"
+	case dns.RcodeServerFailure:
+		return model.DNSProbeStatusServfail, "dns rcode=SERVFAIL"
+	case dns.RcodeNameError:
+		return model.DNSProbeStatusNXDomain, "dns rcode=NXDOMAIN"
+	default:
+		return model.DNSProbeStatusMalformed, fmt.Sprintf("dns rcode=%d", answer.Rcode)
+	}
+
+	if len(answer.Answer) == 0 && len(answer.Ns) == 0 && len(answer.Extra) == 0 {
+		return model.DNSProbeStatusMalformed, "empty response"
+	}
+
+	return model.DNSProbeStatusOK, ""
+}
+
+func classifyExchangeError(err error) model.DNSProbeStatus {
+	if err == nil {
+		return model.DNSProbeStatusOK
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return model.DNSProbeStatusTimeout
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return model.DNSProbeStatusTimeout
+	}
+	return model.DNSProbeStatusNetworkError
+}
+
+func formatProbeFailure(result model.DNSProbeResult) string {
+	label := result.Name
+	if label == "" {
+		label = result.Target
+	}
+	if label == "" {
+		label = "probe"
+	}
+	if result.Detail == "" {
+		return fmt.Sprintf("%s: %s", label, result.Status)
+	}
+	return fmt.Sprintf("%s: %s (%s)", label, result.Status, result.Detail)
+}
+
+func formatObservationFailure(observation model.PublicIPObservation) string {
+	label := observation.Provider
+	if observation.Target != "" {
+		label = fmt.Sprintf("%s via %s", label, observation.Target)
+	}
+	if observation.Detail == "" {
+		return label
+	}
+	return fmt.Sprintf("%s: %s", label, observation.Detail)
 }

@@ -107,12 +107,12 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 			Resolver5335Udp: mapSocketProbe(state.Listeners.Resolver5335UDP),
 		},
 		Upstream: &netmonv1.UpstreamState{
-			DnsV4: mapDNSProbe(state.Upstream.ExternalDNSV4),
-			DnsV6: mapDNSProbe(state.Upstream.ExternalDNSV6),
-			PublicIpv4: &netmonv1.PublicIPObservation{
-				Ipv4:   state.Upstream.PublicIPv4.IPv4,
-				Detail: state.Upstream.PublicIPv4.Error,
-			},
+			RootV4:      mapDNSProbe(state.Upstream.RootDNSV4),
+			RootV6:      mapDNSProbe(state.Upstream.RootDNSV6),
+			RecursiveV4: mapDNSProbe(state.Upstream.RecursiveDNSV4),
+			RecursiveV6: mapDNSProbe(state.Upstream.RecursiveDNSV6),
+			PublicIpv4:  mapPublicIPObservation(state.Upstream.PublicIPv4),
+			PublicIpv6:  mapPublicIPObservation(state.Upstream.PublicIPv6),
 		},
 	}), nil
 }
@@ -197,6 +197,7 @@ func mapStatusView(status monitor.StatusView) *netmonv1.GetStatusResponse {
 		OverallSeverity: mapSeverity(status.OverallSeverity),
 		Summary:         status.Summary,
 		PublicIpv4:      status.PublicIPv4,
+		PublicIpv6:      status.PublicIPv6,
 		Checks:          checks,
 	}
 }
@@ -263,12 +264,30 @@ func mapSocketProbe(probe model.SocketProbe) *netmonv1.ListenerBinding {
 	}
 }
 
-func mapDNSProbe(result model.DNSProbeResult) *netmonv1.ProbeResult {
-	return &netmonv1.ProbeResult{
-		Ok:        result.OK(),
-		Detail:    result.Error,
-		Responder: result.Target,
+func mapDNSProbe(result model.DNSProbeResult) *netmonv1.DnsProbeResult {
+	out := &netmonv1.DnsProbeResult{
+		Name:   result.Name,
+		Target: result.Target,
+		Status: result.Status.String(),
+		Detail: result.Detail,
 	}
+	if result.Latency != 0 {
+		out.Latency = durationpb.New(result.Latency)
+	}
+	return out
+}
+
+func mapPublicIPObservation(observation model.PublicIPObservation) *netmonv1.PublicIPObservation {
+	out := &netmonv1.PublicIPObservation{
+		Provider: observation.Provider,
+		Target:   observation.Target,
+		Ip:       observation.IP,
+		Detail:   observation.Detail,
+	}
+	if observation.Latency != 0 {
+		out.Latency = durationpb.New(observation.Latency)
+	}
+	return out
 }
 
 func hasProbeFamily(probe model.SocketProbe, family int) bool {

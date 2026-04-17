@@ -39,7 +39,8 @@ func statusViewFromSnapshot(state model.SystemState, checks model.CheckSet) Stat
 	return StatusView{
 		OverallSeverity: model.CurrentHealthSeverity(checks),
 		Summary:         summarizeChecks(checks),
-		PublicIPv4:      state.Upstream.PublicIPv4.IPv4,
+		PublicIPv4:      state.Upstream.PublicIPv4.IP,
+		PublicIPv6:      state.Upstream.PublicIPv6.IP,
 		Checks:          orderedChecks(checks),
 	}
 }
@@ -51,7 +52,7 @@ func cloneStatusView(view StatusView) StatusView {
 }
 
 func statusViewsEqual(a, b StatusView) bool {
-	if a.OverallSeverity != b.OverallSeverity || a.Summary != b.Summary || a.PublicIPv4 != b.PublicIPv4 {
+	if a.OverallSeverity != b.OverallSeverity || a.Summary != b.Summary || a.PublicIPv4 != b.PublicIPv4 || a.PublicIPv6 != b.PublicIPv6 {
 		return false
 	}
 	if len(a.Checks) != len(b.Checks) {

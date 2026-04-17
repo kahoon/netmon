@@ -1,6 +1,10 @@
 package model
 
-import "net"
+import (
+	"net"
+	"strings"
+	"time"
+)
 
 type Severity int
 
@@ -81,10 +85,33 @@ type ListenerState struct {
 	Resolver5335UDP SocketProbe
 }
 
+type DNSProbeStatus string
+
+const (
+	DNSProbeStatusOK               DNSProbeStatus = "ok"
+	DNSProbeStatusTimeout          DNSProbeStatus = "timeout"
+	DNSProbeStatusNetworkError     DNSProbeStatus = "network_error"
+	DNSProbeStatusRefused          DNSProbeStatus = "refused"
+	DNSProbeStatusServfail         DNSProbeStatus = "servfail"
+	DNSProbeStatusNXDomain         DNSProbeStatus = "nxdomain"
+	DNSProbeStatusMalformed        DNSProbeStatus = "malformed"
+	DNSProbeStatusUnexpectedAnswer DNSProbeStatus = "unexpected_answer"
+)
+
+func (s DNSProbeStatus) String() string {
+	if s == "" {
+		return string(DNSProbeStatusMalformed)
+	}
+	return string(s)
+}
+
 type UpstreamState struct {
-	ExternalDNSV4 DNSProbeResult
-	ExternalDNSV6 DNSProbeResult
-	PublicIPv4    PublicIPResult
+	RootDNSV4      DNSProbeResult
+	RootDNSV6      DNSProbeResult
+	RecursiveDNSV4 DNSProbeResult
+	RecursiveDNSV6 DNSProbeResult
+	PublicIPv4     PublicIPObservation
+	PublicIPv6     PublicIPObservation
 }
 
 type SystemState struct {
@@ -115,17 +142,67 @@ func (p SocketProbe) HasNonLoopbackIPv6() bool {
 }
 
 type DNSProbeResult struct {
-	Target string
-	Error  string
+	Name    string
+	Target  string
+	Status  DNSProbeStatus
+	Latency time.Duration
+	Detail  string
 }
 
 func (r DNSProbeResult) OK() bool {
-	return r.Target != ""
+	return r.Status == DNSProbeStatusOK
 }
 
-type PublicIPResult struct {
-	IPv4  string
-	Error string
+func (r DNSProbeResult) Summary() string {
+	if r.OK() {
+		if r.Name != "" {
+			return r.Name
+		}
+		if r.Target != "" {
+			return r.Target
+		}
+		return "ok"
+	}
+
+	parts := []string{r.Status.String()}
+	if r.Name != "" {
+		parts = append(parts, "via "+r.Name)
+	}
+	if r.Detail != "" {
+		parts = append(parts, r.Detail)
+	}
+	return strings.Join(parts, "; ")
+}
+
+type PublicIPObservation struct {
+	Provider string
+	Target   string
+	IP       string
+	Latency  time.Duration
+	Detail   string
+}
+
+func (o PublicIPObservation) OK() bool {
+	return o.IP != ""
+}
+
+func (o PublicIPObservation) Summary() string {
+	if o.OK() {
+		parts := []string{o.IP}
+		if o.Provider != "" {
+			parts = append(parts, "via "+o.Provider)
+		}
+		return strings.Join(parts, "; ")
+	}
+
+	parts := []string{}
+	if o.Provider != "" {
+		parts = append(parts, o.Provider)
+	}
+	if o.Detail != "" {
+		parts = append(parts, o.Detail)
+	}
+	return strings.Join(parts, "; ")
 }
 
 func hasFamily(bindings []string, family int) bool {
