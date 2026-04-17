@@ -1,0 +1,16 @@
+[Unit]
+Description=netmon DNS network health monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+RuntimeDirectory=netmon
+EnvironmentFile=/etc/default/netmon
+ExecStart=/usr/sbin/netmond
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
