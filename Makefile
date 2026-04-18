@@ -2,7 +2,7 @@ GOCACHE ?= /tmp/netmon-gocache
 GOOS ?= linux
 GOARCH ?= amd64
 BUF ?= $(shell go env GOPATH)/bin/buf
-VERSION ?= dev
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo "dev")
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILD_TIME ?= $(shell date +%Y-%m-%dT%H:%M:%S%z | sed 's/..$$/:&/')
 
@@ -13,10 +13,12 @@ LDFLAGS := -X github.com/kahoon/netmon/internal/version.Version=$(VERSION) \
 .PHONY: build build-linux test fmt generate clean
 
 build-linux:
+	@echo "Building: $(VERSION)"
 	@GOCACHE="$(GOCACHE)" GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -ldflags '$(LDFLAGS)' ./cmd/netmond
 	@GOCACHE="$(GOCACHE)" GOOS="$(GOOS)" GOARCH="$(GOARCH)" go build -ldflags '$(LDFLAGS)' ./cmd/netmonctl
 
 build:
+	@echo "Building: $(VERSION)"
 	@go build -ldflags '$(LDFLAGS)' ./cmd/netmond
 	@go build -ldflags '$(LDFLAGS)' ./cmd/netmonctl
 
