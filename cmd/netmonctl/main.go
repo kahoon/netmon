@@ -520,18 +520,18 @@ func printListenerBinding(label string, binding *netmonv1.ListenerBinding) {
 }
 
 func printDNSProbe(label string, probe *netmonv1.DnsProbeResult) {
-	fmt.Printf("  %-18s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
+	fmt.Printf("  %-19s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
 	if name := probe.GetName(); name != "" {
-		fmt.Printf("  %-18s %s\n", "", name)
+		fmt.Printf("  %-19s %s\n", "", name)
 	}
 	if target := probe.GetTarget(); target != "" {
-		fmt.Printf("  %-18s %s\n", "", target)
+		fmt.Printf("  %-19s %s\n", "", target)
 	}
 	if latency := probe.GetLatency(); latency != nil {
-		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
+		fmt.Printf("  %-19s latency=%s\n", "", latency.AsDuration())
 	}
 	if detail := probe.GetDetail(); detail != "" {
-		fmt.Printf("  %-18s %s\n", "", detail)
+		fmt.Printf("  %-19s %s\n", "", detail)
 	}
 }
 
@@ -545,37 +545,37 @@ func joinOrNone(values []string) string {
 }
 
 func printPublicIPObservation(label string, observation *netmonv1.PublicIPObservation) {
-	fmt.Printf("  %-18s %s\n", label+":", defaultString(observation.GetIp(), "(unknown)"))
+	fmt.Printf("  %-19s %s\n", label+":", defaultString(observation.GetIp(), "(unknown)"))
 	if provider := observation.GetProvider(); provider != "" {
-		fmt.Printf("  %-18s provider=%s\n", "", provider)
+		fmt.Printf("  %-19s provider=%s\n", "", provider)
 	}
 	if target := observation.GetTarget(); target != "" {
-		fmt.Printf("  %-18s target=%s\n", "", target)
+		fmt.Printf("  %-19s target=%s\n", "", target)
 	}
 	if latency := observation.GetLatency(); latency != nil {
-		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
+		fmt.Printf("  %-19s latency=%s\n", "", latency.AsDuration())
 	}
 	if detail := observation.GetDetail(); detail != "" {
-		fmt.Printf("  %-18s %s\n", "", detail)
+		fmt.Printf("  %-19s %s\n", "", detail)
 	}
 }
 
 func printDNSSECProbe(label string, probe *netmonv1.DnssecProbeAttempt) {
-	fmt.Printf("  %-18s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
+	fmt.Printf("  %-19s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
 	if name := probe.GetName(); name != "" {
-		fmt.Printf("  %-18s %s\n", "", name)
+		fmt.Printf("  %-19s %s\n", "", name)
 	}
 	if target := probe.GetTarget(); target != "" {
-		fmt.Printf("  %-18s target=%s\n", "", target)
+		fmt.Printf("  %-19s target=%s\n", "", target)
 	}
 	if rcode := probe.GetRcode(); rcode != "" {
-		fmt.Printf("  %-18s rcode=%s ad=%t\n", "", rcode, probe.GetAd())
+		fmt.Printf("  %-19s rcode=%s ad=%t\n", "", rcode, probe.GetAd())
 	}
 	if latency := probe.GetLatency(); latency != nil {
-		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
+		fmt.Printf("  %-19s latency=%s\n", "", latency.AsDuration())
 	}
 	if detail := probe.GetDetail(); detail != "" {
-		fmt.Printf("  %-18s %s\n", "", detail)
+		fmt.Printf("  %-19s %s\n", "", detail)
 	}
 }
 

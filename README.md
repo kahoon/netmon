@@ -14,8 +14,9 @@ The current health model is intentionally narrow:
 - at least one usable IPv6 GUA must be present
 - port `53` must be listening on non-loopback IPv4 and IPv6
 - port `5335` must be listening on loopback only
-- outbound DNS queries to root servers must work over IPv4 or IPv6
-- public IPv4 changes are observed and reported as informational changes
+- external DNS health must remain functional over IPv4 and IPv6
+- local Unbound DNSSEC validation must behave correctly
+- public IPv4 and public IPv6 changes are observed and reported as informational changes
 
 This makes it much quieter than a raw address-change notifier. Temporary IPv6
 churn is ignored unless it changes one of the checks above.
@@ -41,9 +42,17 @@ For listeners on the host:
 
 For outbound reachability:
 
-- an IPv4 UDP DNS query for `.` `NS` must succeed against one configured root server
-- an IPv6 UDP DNS query for `.` `NS` must succeed against one configured root server
-- the current public IPv4 is resolved from `myip.opendns.com` through an OpenDNS resolver
+- an IPv4 UDP DNS query for `.` `NS` must succeed against one pinned root target
+- an IPv6 UDP DNS query for `.` `NS` must succeed against one pinned root target
+- recursive IPv4 resolution of the same pinned root hostnames must return the expected address
+- recursive IPv6 resolution of the same pinned root hostnames must return the expected address
+- the current public IPv4 is observed through a DNS-based provider chain
+- the current public IPv6 is observed through a DNS-based provider chain
+
+For local DNSSEC validation:
+
+- a recursive `A` query for `internetsociety.org.` against local Unbound on `127.0.0.1:5335` must succeed with `AD=true`
+- a recursive `A` query for `dnssec-failed.org.` against local Unbound on `127.0.0.1:5335` must fail with `SERVFAIL`
 
 ## Alert Severity
 
@@ -56,13 +65,14 @@ For outbound reachability:
   - `5335/udp` not listening on loopback
 - `WARN`
   - no usable IPv6 GUA
-  - outbound root DNS probe fails on IPv4 only
-  - outbound root DNS probe fails on IPv6 only
+  - external DNS is degraded on IPv4
+  - external DNS is degraded on IPv6
+  - DNSSEC validation is degraded
   - `5335` is exposed on any non-loopback address
 - `INFO`
   - recovery from a previous warning or critical condition
 
-If both outbound root DNS probes fail, the monitor reports `CRIT`.
+If both IPv4 DNS probes or both IPv6 DNS probes fail, the monitor reports `CRIT`.
 
 Notifications include the reason for reconciliation, the state transition, and
 only the changed non-OK checks. Recoveries are reported briefly, and successful
@@ -109,6 +119,7 @@ Upstream probing is pinned in code:
 - recursive health probes resolve those same root hostnames through public resolvers
 - public IPv4 observation prefers OpenDNS and falls back to Google
 - public IPv6 observation prefers Google and falls back to OpenDNS
+- local DNSSEC validation probes target Unbound directly on `127.0.0.1:5335`
 
 If `EXPECTED_ULA` is unset, the ULA check is skipped.
 
@@ -177,6 +188,7 @@ netmonctl state
 netmonctl state --json
 netmonctl info
 netmonctl refresh --scope upstream
+netmonctl set debug-logging on
 netmonctl set runtime-stats-interval 30m
 netmonctl help refresh
 ```
@@ -210,6 +222,7 @@ Example output:
 [2026-04-17T16:02:11-04:00] refresh_requested    refresh requested scope=upstream
 [2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream reason=trace refresh
 [2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=12.4ms probe_kind=root responder=192.203.230.10 status=ok target=e.root-servers.net.
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=6.1ms probe_kind=dnssec_positive status=ok ad=true rcode=NOERROR target=127.0.0.1:5335
 [2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv6 latency=15.1ms probe_kind=public_ip provider=Google status=ok ip=2607:f2c0:... target=2001:4860:4802:32::a
 [2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=upstream duration=58.3ms reason=trace refresh
 [2026-04-17T16:02:11-04:00] checks_changed       checks evaluated changed=1 reason=trace refresh
@@ -242,10 +255,10 @@ quiet on a stable system and only speaks when something meaningful happens:
 Example:
 
 ```text
-[2026-04-15T20:14:03Z] OK   healthy
-[2026-04-15T21:03:18Z] WARN external DNS over IPv6 failing
+[2026-04-15T20:14:03-04:00] OK   healthy
+[2026-04-15T21:03:18-04:00] WARN external DNS over IPv6 failing
   - external DNS IPv6: external DNS over IPv6 failing
-[2026-04-15T21:04:02Z] OK   healthy
+[2026-04-15T21:04:02-04:00] OK   healthy
 ```
 
 This stream is intentionally state-oriented rather than event-oriented. It does
@@ -288,11 +301,11 @@ along with task metadata when available:
 Example:
 
 ```text
-[2026-04-15T17:20:19Z] scheduled   refresh:upstream delay=0s
-[2026-04-15T17:20:19Z] executed    refresh:upstream duration=49.345483ms
-[2026-04-15T17:20:57Z] scheduled   refresh:interface:event:eno1 delay=8s
-[2026-04-15T17:20:57Z] rescheduled refresh:interface:event:eno1
-[2026-04-15T17:21:05Z] executed    refresh:interface:event:eno1 duration=758.411µs
+[2026-04-15T17:20:19-04:00] scheduled   refresh:upstream delay=0s
+[2026-04-15T17:20:19-04:00] executed    refresh:upstream duration=49.345483ms
+[2026-04-15T17:20:57-04:00] scheduled   refresh:interface:event:eno1 delay=8s
+[2026-04-15T17:20:57-04:00] rescheduled refresh:interface:event:eno1
+[2026-04-15T17:21:05-04:00] executed    refresh:interface:event:eno1 duration=758.411µs
 ```
 
 That output is not just “nice to have” logging. It makes several design choices
@@ -384,7 +397,7 @@ Edit `/etc/default/netmon` for your environment before starting the service.
 3. Debounce interface bursts for `8s`.
 4. Refresh interface, listeners, and upstream reachability on separate schedules.
 5. Evaluate a fixed set of checks against the latest collected state.
-6. Notify only if a check changed or the observed public IPv4 changed.
+6. Notify only if a check changed or the observed public IPv4 or IPv6 changed.
 
 By default the schedulers run on these cadences:
 
@@ -401,9 +414,11 @@ By default the schedulers run on these cadences:
 - It currently posts to `https://ntfy.sh/<topic>`.
 - It reads listener state from procfs rather than shelling out to `ss` or
   `netstat`.
-- The upstream reachability probe is a direct UDP DNS query for `.` `NS`
-  against a root server target.
-- The public IPv4 observation uses a DNS lookup for `myip.opendns.com`
-  through a configurable OpenDNS resolver.
+- Upstream DNS health combines direct root `NS .` probes with recursive
+  correctness checks against the same pinned root hostnames.
+- Public IPv4 and public IPv6 observation both use DNS-based provider chains
+  with deterministic fallback.
+- DNSSEC validation is tested directly against local Unbound on `127.0.0.1:5335`
+  using one positive and one negative validation query.
 - Notification delivery resolves the notification host through a dedicated
   fallback resolver instead of the local system resolver.
