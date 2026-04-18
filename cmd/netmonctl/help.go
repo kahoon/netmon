@@ -70,7 +70,7 @@ Scopes:
   upstream    Trace only upstream probes.
 
 Usage:
-  netmonctl trace [-socket path] [-scope all|interface|listeners|upstream]
+  netmonctl trace [-socket path] [-no-trace-id] [-scope all|interface|listeners|upstream]
 
 Examples:
   netmonctl trace

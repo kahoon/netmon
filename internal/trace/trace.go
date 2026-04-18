@@ -37,47 +37,35 @@ type Sink interface {
 type sinkKey struct{}
 type traceIDKey struct{}
 
-func WithSink(ctx context.Context, sink Sink) context.Context {
-	if sink == nil {
-		return ctx
+func With(ctx context.Context, traceID string, sink Sink) (withCtx context.Context) {
+	withCtx = ctx
+	if sink != nil {
+		withCtx = context.WithValue(withCtx, sinkKey{}, sink)
 	}
-	return context.WithValue(ctx, sinkKey{}, sink)
+	if traceID != "" {
+		withCtx = context.WithValue(withCtx, traceIDKey{}, traceID)
+	}
+	return withCtx
 }
 
-func WithTraceID(ctx context.Context, traceID string) context.Context {
-	if traceID == "" {
-		return ctx
-	}
-	return context.WithValue(ctx, traceIDKey{}, traceID)
-}
-
-func SinkFromContext(ctx context.Context) Sink {
+func TraceIDAndSinkFromContext(ctx context.Context) (traceID string, sink Sink) {
 	if ctx == nil {
-		return nil
+		return "", nil
 	}
-	sink, _ := ctx.Value(sinkKey{}).(Sink)
-	return sink
-}
-
-func TraceIDFromContext(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	traceID, _ := ctx.Value(traceIDKey{}).(string)
-	return traceID
+	traceID, _ = ctx.Value(traceIDKey{}).(string)
+	sink, _ = ctx.Value(sinkKey{}).(Sink)
+	return traceID, sink
 }
 
 func Emit(ctx context.Context, kind, message string, fields map[string]string) {
-	sink := SinkFromContext(ctx)
+	traceID, sink := TraceIDAndSinkFromContext(ctx)
 	if sink == nil {
 		return
 	}
-
 	cloned := make(map[string]string, len(fields))
 	maps.Copy(cloned, fields)
-
 	sink.Emit(Event{
-		TraceID: TraceIDFromContext(ctx),
+		TraceID: traceID,
 		At:      time.Now().Local(),
 		Kind:    kind,
 		Message: message,

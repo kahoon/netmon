@@ -100,20 +100,20 @@ func (m *Monitor) Refresh(ctx context.Context, scope RefreshScope) error {
 	return m.refreshWithReason(ctx, scope, "manual refresh")
 }
 
-func (m *Monitor) Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error {
-	ctx = trace.WithSink(ctx, sink)
-	ctx = trace.WithTraceID(ctx, trace.NewTraceID())
+func (m *Monitor) Trace(ctx context.Context, refreshScope RefreshScope, sink trace.Sink) error {
+	ctx = trace.With(ctx, trace.NewTraceID(), sink)
 	started := time.Now()
+	scope := formatRefreshScope(refreshScope)
 	trace.Emit(ctx, trace.EventTraceStarted, "trace started", map[string]string{
-		"scope": formatRefreshScope(scope),
+		"scope": scope,
 	})
 	trace.Emit(ctx, trace.EventRefreshRequested, "refresh requested", map[string]string{
-		"scope": formatRefreshScope(scope),
+		"scope": scope,
 	})
 
-	if err := m.refreshWithReason(ctx, scope, "trace refresh"); err != nil {
+	if err := m.refreshWithReason(ctx, refreshScope, "trace refresh"); err != nil {
 		trace.Emit(ctx, trace.EventTraceFailed, "trace failed", map[string]string{
-			"scope":    formatRefreshScope(scope),
+			"scope":    scope,
 			"duration": time.Since(started).String(),
 			"error":    err.Error(),
 		})
@@ -121,7 +121,7 @@ func (m *Monitor) Trace(ctx context.Context, scope RefreshScope, sink trace.Sink
 	}
 
 	trace.Emit(ctx, trace.EventTraceCompleted, "trace completed", map[string]string{
-		"scope":    formatRefreshScope(scope),
+		"scope":    scope,
 		"duration": time.Since(started).String(),
 	})
 	return nil

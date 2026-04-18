@@ -124,8 +124,10 @@ func runWatch(spec commandSpec, args []string) {
 }
 
 func runTrace(spec commandSpec, args []string) {
+	var noTraceID bool
 	var scopeName string
 	cmd := newCommandContextWithTimeout(spec, args, forever, func(fs *flag.FlagSet) {
+		fs.BoolVar(&noTraceID, "no-trace-id", false, "Don't include a trace ID in emitted events (for testing)")
 		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream")
 	})
 	defer cmd.cancel()
@@ -142,7 +144,7 @@ func runTrace(spec commandSpec, args []string) {
 	defer stream.Close()
 
 	for stream.Receive() {
-		printTraceEvent(stream.Msg().GetEvent())
+		printTraceEvent(stream.Msg().GetEvent(), noTraceID)
 	}
 	if err := stream.Err(); err != nil && !isCanceledError(err) {
 		log.Fatal(err)
@@ -479,7 +481,7 @@ func printTaskEvent(event *netmonv1.TaskEvent) {
 	fmt.Println(line)
 }
 
-func printTraceEvent(event *netmonv1.TraceEvent) {
+func printTraceEvent(event *netmonv1.TraceEvent, noTraceID bool) {
 	if event == nil {
 		return
 	}
@@ -490,7 +492,7 @@ func printTraceEvent(event *netmonv1.TraceEvent) {
 	}
 
 	line := fmt.Sprintf("[%s] %-20s %s", timestamp.Format(time.RFC3339), event.GetKind(), event.GetMessage())
-	if traceID := event.GetTraceId(); traceID != "" {
+	if traceID := event.GetTraceId(); traceID != "" && !noTraceID {
 		line += " trace_id=" + traceID
 	}
 	fields := event.GetFields()
