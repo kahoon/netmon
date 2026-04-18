@@ -65,3 +65,55 @@ func TestEvaluateChecksIncludesInterfaceOperationalCheck(t *testing.T) {
 		t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
 	}
 }
+
+func TestDNSSECValidationCheck(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		result   DNSSECProbeResult
+		severity Severity
+		summary  string
+	}{
+		{
+			name: "healthy",
+			result: DNSSECProbeResult{
+				Positive: DNSSECProbeAttempt{Status: DNSSECProbeStatusOK},
+				Negative: DNSSECProbeAttempt{Status: DNSSECProbeStatusOK},
+			},
+			severity: SeverityOK,
+		},
+		{
+			name: "degraded",
+			result: DNSSECProbeResult{
+				Positive: DNSSECProbeAttempt{Status: DNSSECProbeStatusOK},
+				Negative: DNSSECProbeAttempt{Status: DNSSECProbeStatusUnexpectedSuccess, Detail: "expected SERVFAIL"},
+			},
+			severity: SeverityWarn,
+			summary:  "DNSSEC validation degraded",
+		},
+		{
+			name: "failing",
+			result: DNSSECProbeResult{
+				Positive: DNSSECProbeAttempt{Status: DNSSECProbeStatusUnexpectedFailure, Detail: "missing AD bit"},
+				Negative: DNSSECProbeAttempt{Status: DNSSECProbeStatusUnexpectedSuccess, Detail: "expected SERVFAIL"},
+			},
+			severity: SeverityCrit,
+			summary:  "DNSSEC validation failing",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := dnssecValidationCheck(tt.result)
+			if got.Severity != tt.severity {
+				t.Fatalf("Severity = %s, want %s", got.Severity, tt.severity)
+			}
+			if got.Summary != tt.summary {
+				t.Fatalf("Summary = %q, want %q", got.Summary, tt.summary)
+			}
+		})
+	}
+}

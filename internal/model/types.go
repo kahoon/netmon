@@ -110,6 +110,7 @@ type UpstreamState struct {
 	RootDNSV6      DNSProbeResult
 	RecursiveDNSV4 DNSProbeResult
 	RecursiveDNSV6 DNSProbeResult
+	DNSSEC         DNSSECProbeResult
 	PublicIPv4     PublicIPObservation
 	PublicIPv6     PublicIPObservation
 }
@@ -203,6 +204,64 @@ func (o PublicIPObservation) Summary() string {
 		parts = append(parts, o.Detail)
 	}
 	return strings.Join(parts, "; ")
+}
+
+type DNSSECProbeStatus string
+
+const (
+	DNSSECProbeStatusOK                DNSSECProbeStatus = "ok"
+	DNSSECProbeStatusUnexpectedSuccess DNSSECProbeStatus = "unexpected_success"
+	DNSSECProbeStatusUnexpectedFailure DNSSECProbeStatus = "unexpected_failure"
+	DNSSECProbeStatusTimeout           DNSSECProbeStatus = "timeout"
+	DNSSECProbeStatusNetworkError      DNSSECProbeStatus = "network_error"
+)
+
+func (s DNSSECProbeStatus) String() string {
+	if s == "" {
+		return string(DNSSECProbeStatusUnexpectedFailure)
+	}
+	return string(s)
+}
+
+type DNSSECProbeAttempt struct {
+	Name    string
+	Target  string
+	Status  DNSSECProbeStatus
+	Rcode   string
+	AD      bool
+	Latency time.Duration
+	Detail  string
+}
+
+func (a DNSSECProbeAttempt) OK() bool {
+	return a.Status == DNSSECProbeStatusOK
+}
+
+func (a DNSSECProbeAttempt) Summary() string {
+	if a.OK() {
+		parts := []string{"ok"}
+		if a.Name != "" {
+			parts = append(parts, a.Name)
+		}
+		if a.AD {
+			parts = append(parts, "ad=true")
+		}
+		return strings.Join(parts, "; ")
+	}
+
+	parts := []string{a.Status.String()}
+	if a.Rcode != "" {
+		parts = append(parts, "rcode="+a.Rcode)
+	}
+	if a.Detail != "" {
+		parts = append(parts, a.Detail)
+	}
+	return strings.Join(parts, "; ")
+}
+
+type DNSSECProbeResult struct {
+	Positive DNSSECProbeAttempt
+	Negative DNSSECProbeAttempt
 }
 
 func hasFamily(bindings []string, family int) bool {

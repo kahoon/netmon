@@ -439,6 +439,8 @@ func printState(resp *netmonv1.GetStateResponse) {
 	printDNSProbe("Root DNS IPv6", resp.GetUpstream().GetRootV6())
 	printDNSProbe("Recursive DNS IPv4", resp.GetUpstream().GetRecursiveV4())
 	printDNSProbe("Recursive DNS IPv6", resp.GetUpstream().GetRecursiveV6())
+	printDNSSECProbe("DNSSEC Positive", resp.GetUpstream().GetDnssec().GetPositive())
+	printDNSSECProbe("DNSSEC Negative", resp.GetUpstream().GetDnssec().GetNegative())
 	publicIPv4 := resp.GetUpstream().GetPublicIpv4()
 	printPublicIPObservation("Public IPv4", publicIPv4)
 	printPublicIPObservation("Public IPv6", resp.GetUpstream().GetPublicIpv6())
@@ -554,6 +556,25 @@ func printPublicIPObservation(label string, observation *netmonv1.PublicIPObserv
 		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
 	}
 	if detail := observation.GetDetail(); detail != "" {
+		fmt.Printf("  %-18s %s\n", "", detail)
+	}
+}
+
+func printDNSSECProbe(label string, probe *netmonv1.DnssecProbeAttempt) {
+	fmt.Printf("  %-18s %s\n", label+":", formatProbeStatus(probe.GetStatus()))
+	if name := probe.GetName(); name != "" {
+		fmt.Printf("  %-18s %s\n", "", name)
+	}
+	if target := probe.GetTarget(); target != "" {
+		fmt.Printf("  %-18s target=%s\n", "", target)
+	}
+	if rcode := probe.GetRcode(); rcode != "" {
+		fmt.Printf("  %-18s rcode=%s ad=%t\n", "", rcode, probe.GetAd())
+	}
+	if latency := probe.GetLatency(); latency != nil {
+		fmt.Printf("  %-18s latency=%s\n", "", latency.AsDuration())
+	}
+	if detail := probe.GetDetail(); detail != "" {
 		fmt.Printf("  %-18s %s\n", "", detail)
 	}
 }

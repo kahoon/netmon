@@ -18,6 +18,7 @@ const (
 	checkExpose5335UDP   = "resolver5335-exposed-udp"
 	checkExternalDNSV4   = "external-dns-v4"
 	checkExternalDNSV6   = "external-dns-v6"
+	checkDNSSEC          = "dnssec-validation"
 )
 
 var checkOrder = []string{
@@ -32,6 +33,7 @@ var checkOrder = []string{
 	checkExpose5335UDP,
 	checkExternalDNSV4,
 	checkExternalDNSV6,
+	checkDNSSEC,
 }
 
 func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
@@ -47,6 +49,7 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, exposureCheck(checkExpose5335UDP, "5335/udp", state.Listeners.Resolver5335UDP))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.RootDNSV4, state.Upstream.RecursiveDNSV4))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.RootDNSV6, state.Upstream.RecursiveDNSV6))
+	addCheck(checks, dnssecValidationCheck(state.Upstream.DNSSEC))
 	return checks
 }
 
@@ -210,6 +213,31 @@ func externalDNSCheck(key, family string, root, recursive DNSProbeResult) CheckR
 		check.Summary = fmt.Sprintf("external DNS over %s failing", family)
 	}
 	check.Detail = fmt.Sprintf("root: %s; recursive: %s", root.Summary(), recursive.Summary())
+	return check
+}
+
+func dnssecValidationCheck(result DNSSECProbeResult) CheckResult {
+	check := CheckResult{
+		Key:      checkDNSSEC,
+		Label:    "DNSSEC validation",
+		Severity: SeverityOK,
+	}
+
+	positiveOK := result.Positive.OK()
+	negativeOK := result.Negative.OK()
+	if positiveOK && negativeOK {
+		return check
+	}
+
+	switch {
+	case positiveOK || negativeOK:
+		check.Severity = SeverityWarn
+		check.Summary = "DNSSEC validation degraded"
+	default:
+		check.Severity = SeverityCrit
+		check.Summary = "DNSSEC validation failing"
+	}
+	check.Detail = fmt.Sprintf("positive: %s; negative: %s", result.Positive.Summary(), result.Negative.Summary())
 	return check
 }
 

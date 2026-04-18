@@ -141,6 +141,21 @@ message PublicIPObservation {
   google.protobuf.Duration latency = 5;
 }
 
+message DnssecProbeAttempt {
+  string name = 1;
+  string target = 2;
+  string status = 3;
+  string rcode = 4;
+  bool ad = 5;
+  string detail = 6;
+  google.protobuf.Duration latency = 7;
+}
+
+message DnssecProbeResult {
+  DnssecProbeAttempt positive = 1;
+  DnssecProbeAttempt negative = 2;
+}
+
 message UpstreamState {
   DnsProbeResult root_v4 = 1;
   DnsProbeResult root_v6 = 2;
@@ -148,6 +163,7 @@ message UpstreamState {
   DnsProbeResult recursive_v6 = 4;
   PublicIPObservation public_ipv4 = 5;
   PublicIPObservation public_ipv6 = 6;
+  DnssecProbeResult dnssec = 7;
 }
 
 message GetStateResponse {

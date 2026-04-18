@@ -146,6 +146,7 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 			RecursiveV6: mapDNSProbe(state.Upstream.RecursiveDNSV6),
 			PublicIpv4:  mapPublicIPObservation(state.Upstream.PublicIPv4),
 			PublicIpv6:  mapPublicIPObservation(state.Upstream.PublicIPv6),
+			Dnssec:      mapDNSSECProbeResult(state.Upstream.DNSSEC),
 		},
 	}), nil
 }
@@ -332,6 +333,28 @@ func mapPublicIPObservation(observation model.PublicIPObservation) *netmonv1.Pub
 	}
 	if observation.Latency != 0 {
 		out.Latency = durationpb.New(observation.Latency)
+	}
+	return out
+}
+
+func mapDNSSECProbeResult(result model.DNSSECProbeResult) *netmonv1.DnssecProbeResult {
+	return &netmonv1.DnssecProbeResult{
+		Positive: mapDNSSECProbeAttempt(result.Positive),
+		Negative: mapDNSSECProbeAttempt(result.Negative),
+	}
+}
+
+func mapDNSSECProbeAttempt(attempt model.DNSSECProbeAttempt) *netmonv1.DnssecProbeAttempt {
+	out := &netmonv1.DnssecProbeAttempt{
+		Name:   attempt.Name,
+		Target: attempt.Target,
+		Status: attempt.Status.String(),
+		Rcode:  attempt.Rcode,
+		Ad:     attempt.AD,
+		Detail: attempt.Detail,
+	}
+	if attempt.Latency != 0 {
+		out.Latency = durationpb.New(attempt.Latency)
 	}
 	return out
 }
