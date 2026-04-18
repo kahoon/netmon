@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package netmon.v1;
+
+option go_package = "github.com/kahoon/netmon/proto/netmon/v1;netmonv1";
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+service NetmonService {
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  rpc WatchStatus(WatchStatusRequest) returns (stream WatchStatusResponse);
+  rpc WatchTasks(WatchTasksRequest) returns (stream WatchTasksResponse);
+  rpc Trace(TraceRequest) returns (stream TraceResponse);
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+  rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+  rpc SetDebug(SetDebugRequest) returns (SetDebugResponse);
+  rpc SetRuntimeStatsInterval(SetRuntimeStatsIntervalRequest) returns (SetRuntimeStatsIntervalResponse);
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_OK = 1;
+  SEVERITY_INFO = 2;
+  SEVERITY_WARN = 3;
+  SEVERITY_CRIT = 4;
+}
+
+enum RefreshScope {
+  REFRESH_SCOPE_UNSPECIFIED = 0;
+  REFRESH_SCOPE_ALL = 1;
+  REFRESH_SCOPE_INTERFACE = 2;
+  REFRESH_SCOPE_LISTENERS = 3;
+  REFRESH_SCOPE_UPSTREAM = 4;
+}
+
+enum TaskEventKind {
+  TASK_EVENT_KIND_UNSPECIFIED = 0;
+  TASK_EVENT_KIND_SCHEDULED = 1;
+  TASK_EVENT_KIND_RESCHEDULED = 2;
+  TASK_EVENT_KIND_EXECUTED = 3;
+  TASK_EVENT_KIND_CANCELLED = 4;
+  TASK_EVENT_KIND_FAILED = 5;
+}
+
+message Check {
+  string name = 1;
+  Severity severity = 2;
+  string summary = 3;
+  string detail = 4;
+}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  Severity overall_severity = 1;
+  string summary = 2;
+  string public_ipv4 = 3;
+  string public_ipv6 = 4;
+  repeated Check checks = 5;
+}
+
+message WatchStatusRequest {}
+
+message WatchStatusResponse {
+  GetStatusResponse status = 1;
+}
+
+message WatchTasksRequest {}
+
+message TaskEvent {
+  google.protobuf.Timestamp at = 1;
+  string id = 2;
+  TaskEventKind kind = 3;
+  google.protobuf.Duration delay = 4;
+  google.protobuf.Duration duration = 5;
+  string error = 6;
+}
+
+message WatchTasksResponse {
+  TaskEvent event = 1;
+}
+
+message TraceRequest {
+  RefreshScope scope = 1;
+}
+
+message TraceEvent {
+  google.protobuf.Timestamp at = 1;
+  string trace_id = 2;
+  string kind = 3;
+  string message = 4;
+  map<string, string> fields = 5;
+}
+
+message TraceResponse {
+  TraceEvent event = 1;
+}
+
+message GetStateRequest {}
+
+message InterfaceState {
+  string name = 1;
+  int32 link_index = 2;
+  bool link_up = 3;
+  string oper_state = 4;
+  repeated string ula = 5;
+  repeated string gua = 6;
+  repeated string usable_gua = 7;
+}
+
+message ListenerBinding {
+  bool any = 1;
+  bool ipv4 = 2;
+  bool ipv6 = 3;
+  bool loopback_only = 4;
+  repeated string addresses = 5;
+}
+
+message ListenerState {
+  ListenerBinding dns53_tcp = 1;
+  ListenerBinding dns53_udp = 2;
+  ListenerBinding resolver5335_tcp = 3;
+  ListenerBinding resolver5335_udp = 4;
+}
+
+message DnsProbeResult {
+  string name = 1;
+  string target = 2;
+  string status = 3;
+  string detail = 4;
+  google.protobuf.Duration latency = 5;
+}
+
+message PublicIPObservation {
+  string provider = 1;
+  string target = 2;
+  string ip = 3;
+  string detail = 4;
+  google.protobuf.Duration latency = 5;
+}
+
+message UpstreamState {
+  DnsProbeResult root_v4 = 1;
+  DnsProbeResult root_v6 = 2;
+  DnsProbeResult recursive_v4 = 3;
+  DnsProbeResult recursive_v6 = 4;
+  PublicIPObservation public_ipv4 = 5;
+  PublicIPObservation public_ipv6 = 6;
+}
+
+message GetStateResponse {
+  InterfaceState interface = 1;
+  ListenerState listeners = 2;
+  UpstreamState upstream = 3;
+}
+
+message GetInfoRequest {}
+
+message GetInfoResponse {
+  string version = 1;
+  int64 started_at_unix = 2;
+  string monitor_interface = 3;
+  string interface_poll = 4;
+  string listener_poll = 5;
+  string upstream_poll = 6;
+  string runtime_stats_interval = 7;
+  string ntfy_host = 8;
+  string commit = 9;
+  string build_time = 10;
+}
+
+message RefreshRequest {
+  RefreshScope scope = 1;
+}
+
+message RefreshResponse {}
+
+message SetRuntimeStatsIntervalRequest {
+  google.protobuf.Duration interval = 1;
+}
+
+message SetRuntimeStatsIntervalResponse {
+  google.protobuf.Duration interval = 1;
+}
+
+message SetDebugRequest {
+  bool debug = 1;
+}
+
+message SetDebugResponse {}

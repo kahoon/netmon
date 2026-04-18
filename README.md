@@ -1,0 +1,409 @@
+# netmon
+
+`netmon` is a small Linux network monitor for a DNS appliance host.
+
+It watches one interface with netlink, runs separate collectors for interface
+state, listener state, and upstream reachability, evaluates a fixed set of
+health checks, sends an `ntfy` notification only when the check results
+change, and exposes a local Connect RPC API over a Unix domain socket.
+
+The current health model is intentionally narrow:
+
+- the monitored interface must remain operational
+- the expected IPv6 ULA must be present
+- at least one usable IPv6 GUA must be present
+- port `53` must be listening on non-loopback IPv4 and IPv6
+- port `5335` must be listening on loopback only
+- outbound DNS queries to root servers must work over IPv4 or IPv6
+- public IPv4 changes are observed and reported as informational changes
+
+This makes it much quieter than a raw address-change notifier. Temporary IPv6
+churn is ignored unless it changes one of the checks above.
+
+## What It Checks
+
+For the monitored interface:
+
+- operational state must remain `up`
+- exact match for `EXPECTED_ULA`
+- presence of at least one usable global IPv6 address
+  - tentative and deprecated GUAs do not count
+
+For listeners on the host:
+
+- `53/tcp` must be reachable on a non-loopback IPv4 bind
+- `53/tcp` must be reachable on a non-loopback IPv6 bind
+- `53/udp` must be reachable on a non-loopback IPv4 bind
+- `53/udp` must be reachable on a non-loopback IPv6 bind
+- `5335/tcp` must be listening on loopback
+- `5335/udp` must be listening on loopback
+- any non-loopback listener on `5335` is treated as exposure and reported
+
+For outbound reachability:
+
+- an IPv4 UDP DNS query for `.` `NS` must succeed against one configured root server
+- an IPv6 UDP DNS query for `.` `NS` must succeed against one configured root server
+- the current public IPv4 is resolved from `myip.opendns.com` through an OpenDNS resolver
+
+## Alert Severity
+
+- `CRIT`
+  - monitored interface operational state is not `up`
+  - expected ULA missing
+  - `53/tcp` missing IPv4 or IPv6 coverage
+  - `53/udp` missing IPv4 or IPv6 coverage
+  - `5335/tcp` not listening on loopback
+  - `5335/udp` not listening on loopback
+- `WARN`
+  - no usable IPv6 GUA
+  - outbound root DNS probe fails on IPv4 only
+  - outbound root DNS probe fails on IPv6 only
+  - `5335` is exposed on any non-loopback address
+- `INFO`
+  - recovery from a previous warning or critical condition
+
+If both outbound root DNS probes fail, the monitor reports `CRIT`.
+
+Notifications include the reason for reconciliation, the state transition, and
+only the changed non-OK checks. Recoveries are reported briefly, and successful
+checks are omitted to keep mobile notifications short.
+
+## Environment
+
+Required:
+
+- `NTFY_TOPIC`
+  - `ntfy.sh` topic to publish notifications to
+
+Recommended:
+
+- `EXPECTED_ULA`
+  - the exact static ULA you expect on the monitored interface
+  - example: `fd8f:bd66:6363:1::15`
+
+Optional:
+
+- `MONITOR_IF`
+  - interface name to monitor
+  - default: `eno1`
+- `NTFY_HOST`
+  - notification host name
+  - default: `ntfy.sh`
+- `NTFY_RESOLVER`
+  - DNS resolver used only for resolving the notification host
+  - default: `9.9.9.9:53`
+- `RPC_SOCKET_PATH`
+  - Unix domain socket path for the local RPC API
+  - default: `/run/netmon/netmond.sock`
+- `DEBUG_EVENTS`
+  - enables raw link, address, and route event logging
+  - default: `false`
+- `RUNTIME_STATS_INTERVAL`
+  - interval for logging Go runtime stats
+  - set to `0` to disable the reporter
+  - default: `168h`
+
+Upstream probing is pinned in code:
+
+- direct authority-style `NS .` probes go to `e.root-servers.net.` and `j.root-servers.net.`
+- recursive health probes resolve those same root hostnames through public resolvers
+- public IPv4 observation prefers OpenDNS and falls back to Google
+- public IPv6 observation prefers Google and falls back to OpenDNS
+
+If `EXPECTED_ULA` is unset, the ULA check is skipped.
+
+## Build
+
+Build on Linux:
+
+```bash
+go build ./cmd/netmond
+```
+
+Cross-compile from another machine:
+
+```bash
+GOOS=linux GOARCH=amd64 go build ./cmd/netmond
+```
+
+Convenience targets are also available:
+
+```bash
+make fmt
+make generate
+make test
+make build
+make build-linux
+```
+
+Builds stamp the binary with version metadata. Override it at build time if you
+want a release identifier:
+
+```bash
+make VERSION=v0.1.0 build-linux
+```
+
+## Run
+
+Example:
+
+```bash
+. /etc/default/netmon
+
+./netmond
+```
+
+The process needs access to Linux netlink and `/proc/net/{tcp,tcp6,udp,udp6}`.
+It is intended to run directly on the Debian host being monitored.
+
+The local RPC API listens on:
+
+```text
+/run/netmon/netmond.sock
+```
+
+## CLI
+
+The local CLI talks to `netmond` over the Unix domain socket. Typical commands:
+
+```bash
+netmonctl status
+netmonctl trace
+netmonctl watch
+netmonctl watch tasks
+netmonctl checks
+netmonctl checks --all
+netmonctl state
+netmonctl state --json
+netmonctl info
+netmonctl refresh --scope upstream
+netmonctl set runtime-stats-interval 30m
+netmonctl help refresh
+```
+
+Use `-socket` on any command if you want to override the default socket path.
+
+## Trace
+
+`netmonctl trace` runs a bounded traced refresh and streams the causal path end to end.
+
+Unlike `watch`, which observes ongoing daemon state, `trace` causes a refresh itself and
+then exits when that work completes. It is meant for answering questions like:
+
+- which collectors ran
+- which upstream probes succeeded or failed
+- how checks changed
+- whether a notification was sent or skipped
+- how long the refresh took
+
+Examples:
+
+```bash
+netmonctl trace
+netmonctl trace -scope upstream
+```
+
+Example output:
+
+```text
+[2026-04-17T16:02:11-04:00] trace_started        trace started scope=upstream
+[2026-04-17T16:02:11-04:00] refresh_requested    refresh requested scope=upstream
+[2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream reason=trace refresh
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=12.4ms probe_kind=root responder=192.203.230.10 status=ok target=e.root-servers.net.
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv6 latency=15.1ms probe_kind=public_ip provider=Google status=ok ip=2607:f2c0:... target=2001:4860:4802:32::a
+[2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=upstream duration=58.3ms reason=trace refresh
+[2026-04-17T16:02:11-04:00] checks_changed       checks evaluated changed=1 reason=trace refresh
+[2026-04-17T16:02:11-04:00] notification_skipped notification skipped reason=no effective changes
+[2026-04-17T16:02:11-04:00] trace_completed      trace completed duration=59.0ms scope=upstream
+```
+
+## Streaming and Live Observability
+
+`netmon` exposes two live streaming views over its local Connect RPC API:
+
+- `netmonctl watch`
+- `netmonctl watch tasks`
+
+They serve different purposes.
+
+### `watch`: live health state
+
+`netmonctl watch` is the operator-facing stream.
+
+It sends the current health view immediately when the client connects, then
+pushes a new update only when the effective status changes. That means it is
+quiet on a stable system and only speaks when something meaningful happens:
+
+- overall severity changes
+- one or more checks change
+- the health summary changes
+- the observed public IPv4 or public IPv6 changes
+
+Example:
+
+```text
+[2026-04-15T20:14:03Z] OK   healthy
+[2026-04-15T21:03:18Z] WARN external DNS over IPv6 failing
+  - external DNS IPv6: external DNS over IPv6 failing
+[2026-04-15T21:04:02Z] OK   healthy
+```
+
+This stream is intentionally state-oriented rather than event-oriented. It does
+not replay every refresh tick or every netlink event. Instead, it answers the
+question:
+
+> “What changed in the effective health of the appliance?”
+
+### `watch tasks`: live scheduler telemetry
+
+`netmonctl watch tasks` is the implementation-facing stream.
+
+It exposes the [`pending`](https://github.com/kahoon/pending) scheduler
+lifecycle through the daemon’s local API. `pending` is a sister repo, and this
+stream makes that orchestration visible in real time. This is particularly
+useful because the monitor relies on debounced and coalesced work rather than a
+single monolithic reconcile loop.
+
+New task subscribers are also seeded with a small recent history, so `watch
+tasks` is useful even if you attach after interesting work has already
+happened. That retained history is backed by another sister repo
+[`ring`](https://github.com/kahoon/ring) package, which keeps the replay path
+simple and bounded.
+
+The task stream includes events such as:
+
+- `scheduled`
+- `rescheduled`
+- `executed`
+- `cancelled`
+- `failed`
+
+along with task metadata when available:
+
+- task id
+- schedule delay
+- execution duration
+- error text
+
+Example:
+
+```text
+[2026-04-15T17:20:19Z] scheduled   refresh:upstream delay=0s
+[2026-04-15T17:20:19Z] executed    refresh:upstream duration=49.345483ms
+[2026-04-15T17:20:57Z] scheduled   refresh:interface:event:eno1 delay=8s
+[2026-04-15T17:20:57Z] rescheduled refresh:interface:event:eno1
+[2026-04-15T17:21:05Z] executed    refresh:interface:event:eno1 duration=758.411µs
+```
+
+That output is not just “nice to have” logging. It makes several design choices
+concrete and inspectable:
+
+- link/address/route churn is debounced into one settled interface refresh
+- periodic tasks and event-driven tasks use the same scheduler primitive
+- runtime services like the stats reporter are treated as managed tasks
+- failures inside scheduled work become visible without requiring ad hoc logging
+
+In practice, `watch tasks` turns the daemon into something you can reason about
+interactively. Instead of guessing why a refresh happened, whether a debounce
+fired, or whether a task was replaced, you can watch the scheduler make those
+decisions live, and you can still see the most recent task activity even if
+you connect a few moments late.
+
+### Why the two streams are separate
+
+The split between `watch` and `watch tasks` is deliberate.
+
+- `watch` is for the appliance operator
+- `watch tasks` is for debugging, development, and understanding the scheduler
+
+Keeping them separate avoids mixing user-facing health state with internal
+activity. The first stream tells you what the appliance believes. The second
+stream tells you how the daemon got there.
+
+### Implementation notes
+
+The streaming layer is intentionally narrow.
+
+- The daemon uses server-streaming Connect RPCs over a Unix domain socket.
+- `watch` is backed by a status broadcaster that only emits on effective health
+  changes.
+- `watch tasks` is backed by the
+  [`pending`](https://github.com/kahoon/pending) `TelemetryHandler`
+  implementation used by the monitor.
+- Recent task history is retained in a bounded
+  [`ring`](https://github.com/kahoon/ring) buffer and replayed to new
+  `watch tasks` subscribers before live task events continue.
+- Both streams use buffered, non-blocking fanout so a slow client cannot stall
+  the monitor.
+- For status updates, the broadcaster uses a “latest value wins” policy rather
+  than an unbounded event queue.
+
+This keeps the streaming features useful in production, while also making the
+control flow of the daemon visible enough to study and extend.
+
+## systemd
+
+Example unit:
+
+```ini
+[Unit]
+Description=netmon network health monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+RuntimeDirectory=netmon
+EnvironmentFile=/etc/default/netmon
+ExecStart=/usr/sbin/netmond
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Example install:
+
+```bash
+sudo install -m 0755 ./netmond /usr/sbin/netmond
+sudo install -m 0755 ./netmonctl /usr/sbin/netmonctl
+sudo install -m 0644 ./contrib/netmon.env.example /etc/default/netmon
+sudo install -m 0644 ./contrib/netmon.service /etc/systemd/system/netmon.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now netmon
+```
+
+Edit `/etc/default/netmon` for your environment before starting the service.
+
+## How It Works
+
+1. Look up the monitored interface.
+2. Subscribe to link, address, and route updates with netlink.
+3. Debounce interface bursts for `8s`.
+4. Refresh interface, listeners, and upstream reachability on separate schedules.
+5. Evaluate a fixed set of checks against the latest collected state.
+6. Notify only if a check changed or the observed public IPv4 changed.
+
+By default the schedulers run on these cadences:
+
+- interface poll: `10m`
+- listener poll: `10m`
+- upstream poll: `5m`
+- runtime stats: `168h`
+
+## Notes
+
+- This is Linux-specific.
+- Deployment helpers live under `contrib/`.
+- Protobuf and Connect stubs are generated with Buf from `proto/netmon/v1/netmon.proto`.
+- It currently posts to `https://ntfy.sh/<topic>`.
+- It reads listener state from procfs rather than shelling out to `ss` or
+  `netstat`.
+- The upstream reachability probe is a direct UDP DNS query for `.` `NS`
+  against a root server target.
+- The public IPv4 observation uses a DNS lookup for `myip.opendns.com`
+  through a configurable OpenDNS resolver.
+- Notification delivery resolves the notification host through a dedicated
+  fallback resolver instead of the local system resolver.
