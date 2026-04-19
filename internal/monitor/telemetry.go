@@ -3,6 +3,8 @@ package monitor
 import (
 	"log"
 	"time"
+
+	"github.com/kahoon/netmon/internal/events"
 )
 
 type pendingTelemetry struct {
@@ -14,10 +16,9 @@ func newPendingTelemetry(m *Monitor) *pendingTelemetry {
 }
 
 func (t *pendingTelemetry) OnScheduled(id string, d time.Duration) {
-	event := TaskEvent{
+	event := events.TaskScheduled{
 		At:    time.Now().Local(),
 		ID:    id,
-		Kind:  TaskEventScheduled,
 		Delay: d,
 	}
 	t.emit(event)
@@ -28,10 +29,9 @@ func (t *pendingTelemetry) OnScheduled(id string, d time.Duration) {
 }
 
 func (t *pendingTelemetry) OnRescheduled(id string) {
-	event := TaskEvent{
-		At:   time.Now().Local(),
-		ID:   id,
-		Kind: TaskEventRescheduled,
+	event := events.TaskRescheduled{
+		At: time.Now().Local(),
+		ID: id,
 	}
 	t.emit(event)
 	if !t.debugEnabled() {
@@ -40,11 +40,22 @@ func (t *pendingTelemetry) OnRescheduled(id string) {
 	log.Printf("task rescheduled: id=%s", id)
 }
 
+func (t *pendingTelemetry) OnExecuting(id string) {
+	event := events.TaskExecuting{
+		At: time.Now().Local(),
+		ID: id,
+	}
+	t.emit(event)
+	if !t.debugEnabled() {
+		return
+	}
+	log.Printf("task executing: id=%s", id)
+}
+
 func (t *pendingTelemetry) OnExecuted(id string, duration time.Duration) {
-	event := TaskEvent{
+	event := events.TaskExecuted{
 		At:       time.Now().Local(),
 		ID:       id,
-		Kind:     TaskEventExecuted,
 		Duration: duration,
 	}
 	t.emit(event)
@@ -55,10 +66,9 @@ func (t *pendingTelemetry) OnExecuted(id string, duration time.Duration) {
 }
 
 func (t *pendingTelemetry) OnCancelled(id string) {
-	event := TaskEvent{
-		At:   time.Now().Local(),
-		ID:   id,
-		Kind: TaskEventCancelled,
+	event := events.TaskCancelled{
+		At: time.Now().Local(),
+		ID: id,
 	}
 	t.emit(event)
 	if !t.debugEnabled() {
@@ -68,10 +78,9 @@ func (t *pendingTelemetry) OnCancelled(id string) {
 }
 
 func (t *pendingTelemetry) OnFailed(id string, err error) {
-	event := TaskEvent{
+	event := events.TaskFailed{
 		At:    time.Now().Local(),
 		ID:    id,
-		Kind:  TaskEventFailed,
 		Error: err.Error(),
 	}
 	t.emit(event)
@@ -87,9 +96,9 @@ func (t *pendingTelemetry) debugEnabled() bool {
 	return t.monitor.debug
 }
 
-func (t *pendingTelemetry) emit(event TaskEvent) {
+func (t *pendingTelemetry) emit(event events.Event) {
 	if t.monitor == nil {
 		return
 	}
-	t.monitor.broadcastTaskEvent(event)
+	t.monitor.bus.Emit(event)
 }

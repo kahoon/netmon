@@ -7,7 +7,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kahoon/netmon/internal/events"
 	"github.com/kahoon/netmon/internal/model"
+	"github.com/kahoon/netmon/internal/stats"
 	"github.com/kahoon/netmon/internal/trace"
 	"github.com/kahoon/netmon/internal/version"
 )
@@ -34,13 +36,7 @@ type Info struct {
 	NtfyHost             string
 }
 
-type StatusView struct {
-	OverallSeverity model.Severity
-	Summary         string
-	PublicIPv4      string
-	PublicIPv6      string
-	Checks          []model.CheckResult
-}
+type StatusView = events.StatusView
 
 type Service interface {
 	GetStatus(ctx context.Context) (StatusView, error)
@@ -48,6 +44,7 @@ type Service interface {
 	WatchTasks(ctx context.Context) (TaskSubscription, error)
 	GetState(ctx context.Context) (model.SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
+	GetStats(ctx context.Context) (stats.Snapshot, error)
 	Refresh(ctx context.Context, scope RefreshScope) error
 	Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error
 	SetDebug(ctx context.Context, debug bool) error
@@ -96,33 +93,45 @@ func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 	}, nil
 }
 
+func (m *Monitor) GetStats(_ context.Context) (stats.Snapshot, error) {
+	return m.stats.Snapshot(), nil
+}
+
 func (m *Monitor) Refresh(ctx context.Context, scope RefreshScope) error {
 	return m.refreshWithReason(ctx, scope, "manual refresh")
 }
 
 func (m *Monitor) Trace(ctx context.Context, refreshScope RefreshScope, sink trace.Sink) error {
-	ctx = trace.With(ctx, trace.NewTraceID(), sink)
+	traceID := trace.NewTraceID()
+	ctx = events.WithSink(events.WithHub(ctx, m.bus), trace.NewFormatterSink(traceID, sink))
 	started := time.Now()
 	scope := formatRefreshScope(refreshScope)
-	trace.Emit(ctx, trace.EventTraceStarted, "trace started", map[string]string{
-		"scope": scope,
+	events.Emit(ctx, events.TraceStarted{
+		At:      started.Local(),
+		TraceID: traceID,
+		Scope:   scope,
 	})
-	trace.Emit(ctx, trace.EventRefreshRequested, "refresh requested", map[string]string{
-		"scope": scope,
+	events.Emit(ctx, events.RefreshRequested{
+		At:    time.Now().Local(),
+		Scope: scope,
 	})
 
 	if err := m.refreshWithReason(ctx, refreshScope, "trace refresh"); err != nil {
-		trace.Emit(ctx, trace.EventTraceFailed, "trace failed", map[string]string{
-			"scope":    scope,
-			"duration": time.Since(started).String(),
-			"error":    err.Error(),
+		events.Emit(ctx, events.TraceFailed{
+			At:       time.Now().Local(),
+			TraceID:  traceID,
+			Scope:    scope,
+			Duration: time.Since(started),
+			Error:    err.Error(),
 		})
 		return err
 	}
 
-	trace.Emit(ctx, trace.EventTraceCompleted, "trace completed", map[string]string{
-		"scope":    scope,
-		"duration": time.Since(started).String(),
+	events.Emit(ctx, events.TraceCompleted{
+		At:       time.Now().Local(),
+		TraceID:  traceID,
+		Scope:    scope,
+		Duration: time.Since(started),
 	})
 	return nil
 }

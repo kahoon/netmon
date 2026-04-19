@@ -10,6 +10,7 @@ import (
 
 	"github.com/kahoon/netmon/internal/model"
 	"github.com/kahoon/netmon/internal/monitor"
+	"github.com/kahoon/netmon/internal/stats"
 	"github.com/kahoon/netmon/internal/trace"
 	netmonv1 "github.com/kahoon/netmon/proto/netmon/v1"
 	netmonv1connect "github.com/kahoon/netmon/proto/netmon/v1/netmonv1connect"
@@ -171,6 +172,14 @@ func (h *Handler) GetInfo(ctx context.Context, _ *connect.Request[netmonv1.GetIn
 	}), nil
 }
 
+func (h *Handler) GetStats(ctx context.Context, _ *connect.Request[netmonv1.GetStatsRequest]) (*connect.Response[netmonv1.GetStatsResponse], error) {
+	snapshot, err := h.svc.GetStats(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(mapStatsSnapshot(snapshot)), nil
+}
+
 func (h *Handler) Refresh(ctx context.Context, req *connect.Request[netmonv1.RefreshRequest]) (*connect.Response[netmonv1.RefreshResponse], error) {
 	scope, err := mapRefreshScope(req.Msg.GetScope())
 	if err != nil {
@@ -254,6 +263,71 @@ func mapTaskEvent(event monitor.TaskEvent) *netmonv1.TaskEvent {
 	return out
 }
 
+func mapStatsSnapshot(snapshot stats.Snapshot) *netmonv1.GetStatsResponse {
+	collectors := make(map[string]*netmonv1.CollectorCounters, len(snapshot.Collectors))
+	for name, counters := range snapshot.Collectors {
+		collectors[name] = &netmonv1.CollectorCounters{
+			Started:  counters.Started,
+			Finished: counters.Finished,
+			Failed:   counters.Failed,
+		}
+	}
+
+	tasksByID := make(map[string]*netmonv1.TaskCounters, len(snapshot.TasksByID))
+	for id, counters := range snapshot.TasksByID {
+		tasksByID[id] = mapTaskCounters(counters)
+	}
+
+	probes := make(map[string]*netmonv1.OutcomeCounters, len(snapshot.Probes))
+	for key, counters := range snapshot.Probes {
+		probes[key] = &netmonv1.OutcomeCounters{
+			Total:   counters.Total,
+			Success: counters.Success,
+			Failure: counters.Failure,
+		}
+	}
+
+	return &netmonv1.GetStatsResponse{
+		Events: &netmonv1.EventCounters{
+			Link:  snapshot.Events.Link,
+			Addr:  snapshot.Events.Addr,
+			Route: snapshot.Events.Route,
+		},
+		Collectors:    collectors,
+		CollectorRuns: maps.Clone(snapshot.CollectorRuns),
+		Tasks:         mapTaskCounters(snapshot.Tasks),
+		TasksById:     tasksByID,
+		Probes:        probes,
+		Checks: &netmonv1.CheckCounters{
+			Evaluations: snapshot.Checks.Evaluations,
+			Changed:     snapshot.Checks.Changed,
+			Passed:      snapshot.Checks.Passed,
+			Failed:      snapshot.Checks.Failed,
+		},
+		Notifications: &netmonv1.NotificationCounters{
+			Sent:    snapshot.Notifications.Sent,
+			Skipped: snapshot.Notifications.Skipped,
+			Failed:  snapshot.Notifications.Failed,
+		},
+		Traces: &netmonv1.TraceCounters{
+			Started:   snapshot.Traces.Started,
+			Completed: snapshot.Traces.Completed,
+			Failed:    snapshot.Traces.Failed,
+		},
+	}
+}
+
+func mapTaskCounters(counters stats.TaskCounters) *netmonv1.TaskCounters {
+	return &netmonv1.TaskCounters{
+		Scheduled:   counters.Scheduled,
+		Rescheduled: counters.Rescheduled,
+		Executing:   counters.Executing,
+		Executed:    counters.Executed,
+		Cancelled:   counters.Cancelled,
+		Failed:      counters.Failed,
+	}
+}
+
 func mapTraceEvent(event trace.Event) *netmonv1.TraceEvent {
 	out := &netmonv1.TraceEvent{
 		TraceId: event.TraceID,
@@ -273,6 +347,8 @@ func mapTaskEventKind(kind monitor.TaskEventKind) netmonv1.TaskEventKind {
 		return netmonv1.TaskEventKind_TASK_EVENT_KIND_SCHEDULED
 	case monitor.TaskEventRescheduled:
 		return netmonv1.TaskEventKind_TASK_EVENT_KIND_RESCHEDULED
+	case monitor.TaskEventExecuting:
+		return netmonv1.TaskEventKind_TASK_EVENT_KIND_EXECUTING
 	case monitor.TaskEventExecuted:
 		return netmonv1.TaskEventKind_TASK_EVENT_KIND_EXECUTED
 	case monitor.TaskEventCancelled:

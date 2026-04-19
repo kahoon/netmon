@@ -14,6 +14,7 @@ service NetmonService {
   rpc Trace(TraceRequest) returns (stream TraceResponse);
   rpc GetState(GetStateRequest) returns (GetStateResponse);
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
   rpc SetDebug(SetDebugRequest) returns (SetDebugResponse);
   rpc SetRuntimeStatsInterval(SetRuntimeStatsIntervalRequest) returns (SetRuntimeStatsIntervalResponse);
@@ -39,9 +40,10 @@ enum TaskEventKind {
   TASK_EVENT_KIND_UNSPECIFIED = 0;
   TASK_EVENT_KIND_SCHEDULED = 1;
   TASK_EVENT_KIND_RESCHEDULED = 2;
-  TASK_EVENT_KIND_EXECUTED = 3;
-  TASK_EVENT_KIND_CANCELLED = 4;
-  TASK_EVENT_KIND_FAILED = 5;
+  TASK_EVENT_KIND_EXECUTING = 3;
+  TASK_EVENT_KIND_EXECUTED = 4;
+  TASK_EVENT_KIND_CANCELLED = 5;
+  TASK_EVENT_KIND_FAILED = 6;
 }
 
 message Check {
@@ -185,6 +187,66 @@ message GetInfoResponse {
   string ntfy_host = 8;
   string commit = 9;
   string build_time = 10;
+}
+
+message GetStatsRequest {}
+
+message OutcomeCounters {
+  uint64 total = 1;
+  uint64 success = 2;
+  uint64 failure = 3;
+}
+
+message EventCounters {
+  uint64 link = 1;
+  uint64 addr = 2;
+  uint64 route = 3;
+}
+
+message CollectorCounters {
+  uint64 started = 1;
+  uint64 finished = 2;
+  uint64 failed = 3;
+}
+
+message TaskCounters {
+  uint64 scheduled = 1;
+  uint64 rescheduled = 2;
+  uint64 executing = 3;
+  uint64 executed = 4;
+  uint64 cancelled = 5;
+  uint64 failed = 6;
+}
+
+message CheckCounters {
+  uint64 evaluations = 1;
+  uint64 changed = 2;
+  uint64 passed = 3;
+  uint64 failed = 4;
+}
+
+message NotificationCounters {
+  uint64 sent = 1;
+  uint64 skipped = 2;
+  uint64 failed = 3;
+}
+
+message TraceCounters {
+  uint64 started = 1;
+  uint64 completed = 2;
+  uint64 failed = 3;
+}
+
+message GetStatsResponse {
+  EventCounters events = 1;
+  map<string, CollectorCounters> collectors = 2;
+  map<string, uint64> collector_runs = 3;
+  TaskCounters tasks = 4;
+  map<string, TaskCounters> tasks_by_id = 5;
+  map<string, OutcomeCounters> probes = 6;
+  CheckCounters checks = 7;
+  NotificationCounters notifications = 8;
+  TraceCounters traces = 9;
 }
 
 message RefreshRequest {

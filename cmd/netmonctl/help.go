@@ -19,6 +19,7 @@ var commandOrder = []string{
 	"watch",
 	"checks",
 	"state",
+	"stats",
 	"info",
 	"refresh",
 	"set",
@@ -123,6 +124,22 @@ Examples:
 `,
 		run: runInfo,
 	},
+	"stats": {
+		name:    "stats",
+		summary: "Show lifetime daemon counters.",
+		help: `Show lifetime daemon counters.
+
+The default output is a readable summary. Use -json for the raw RPC response.
+
+Usage:
+  netmonctl stats [-socket path] [-json]
+
+Examples:
+  netmonctl stats
+  netmonctl stats -json
+`,
+		run: runStats,
+	},
 	"refresh": {
 		name:    "refresh",
 		summary: "Trigger an immediate refresh in the running daemon.",
@@ -219,6 +236,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  netmonctl watch tasks")
 	fmt.Fprintln(w, "  netmonctl checks -all")
 	fmt.Fprintln(w, "  netmonctl state -json")
+	fmt.Fprintln(w, "  netmonctl stats")
 	fmt.Fprintln(w, "  netmonctl refresh -scope upstream")
 	fmt.Fprintln(w, "  netmonctl set runtime-stats-interval 30m")
 	fmt.Fprintln(w, "  netmonctl help refresh")

@@ -213,6 +213,34 @@ func runState(spec commandSpec, args []string) {
 	fmt.Println(string(data))
 }
 
+func runStats(spec commandSpec, args []string) {
+	var jsonOutput bool
+	cmd := newCommandContext(spec, args, func(fs *flag.FlagSet) {
+		fs.BoolVar(&jsonOutput, "json", false, "Render raw JSON")
+	})
+	defer cmd.cancel()
+
+	resp, err := cmd.client.GetStats(cmd.ctx, connect.NewRequest(&netmonv1.GetStatsRequest{}))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if !jsonOutput {
+		printStats(resp.Msg)
+		return
+	}
+
+	data, err := protojson.MarshalOptions{
+		Multiline: true,
+		Indent:    "  ",
+	}.Marshal(resp.Msg)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(data))
+}
+
 func runInfo(spec commandSpec, args []string) {
 	cmd := newCommandContext(spec, args)
 	defer cmd.cancel()
@@ -446,6 +474,98 @@ func printState(resp *netmonv1.GetStateResponse) {
 	printPublicIPObservation("Public IPv6", resp.GetUpstream().GetPublicIpv6())
 }
 
+func printStats(resp *netmonv1.GetStatsResponse) {
+	if events := resp.GetEvents(); events != nil {
+		fmt.Println("Events")
+		fmt.Printf("  link:  %d\n", events.GetLink())
+		fmt.Printf("  addr:  %d\n", events.GetAddr())
+		fmt.Printf("  route: %d\n", events.GetRoute())
+		fmt.Println()
+	}
+
+	if checks := resp.GetChecks(); checks != nil {
+		fmt.Println("Checks")
+		fmt.Printf("  evaluations: %d\n", checks.GetEvaluations())
+		fmt.Printf("  changed:     %d\n", checks.GetChanged())
+		fmt.Printf("  passed:      %d\n", checks.GetPassed())
+		fmt.Printf("  failed:      %d\n", checks.GetFailed())
+		fmt.Println()
+	}
+
+	if notifications := resp.GetNotifications(); notifications != nil {
+		fmt.Println("Notifications")
+		fmt.Printf("  sent:    %d\n", notifications.GetSent())
+		fmt.Printf("  skipped: %d\n", notifications.GetSkipped())
+		fmt.Printf("  failed:  %d\n", notifications.GetFailed())
+		fmt.Println()
+	}
+
+	if traces := resp.GetTraces(); traces != nil {
+		fmt.Println("Traces")
+		fmt.Printf("  started:   %d\n", traces.GetStarted())
+		fmt.Printf("  completed: %d\n", traces.GetCompleted())
+		fmt.Printf("  failed:    %d\n", traces.GetFailed())
+		fmt.Println()
+	}
+
+	if tasks := resp.GetTasks(); tasks != nil {
+		fmt.Println("Tasks")
+		fmt.Printf("  scheduled:   %d\n", tasks.GetScheduled())
+		fmt.Printf("  rescheduled: %d\n", tasks.GetRescheduled())
+		fmt.Printf("  executing:   %d\n", tasks.GetExecuting())
+		fmt.Printf("  executed:    %d\n", tasks.GetExecuted())
+		fmt.Printf("  cancelled:   %d\n", tasks.GetCancelled())
+		fmt.Printf("  failed:      %d\n", tasks.GetFailed())
+		fmt.Println()
+	}
+
+	if collectors := resp.GetCollectors(); len(collectors) > 0 {
+		fmt.Println("Collectors")
+		names := sortedKeys(collectors)
+		for _, name := range names {
+			counters := collectors[name]
+			fmt.Printf("  %s: started=%d finished=%d failed=%d\n", name, counters.GetStarted(), counters.GetFinished(), counters.GetFailed())
+		}
+		fmt.Println()
+	}
+
+	if reasons := resp.GetCollectorRuns(); len(reasons) > 0 {
+		fmt.Println("Collector Reasons")
+		names := sortedKeys(reasons)
+		for _, name := range names {
+			fmt.Printf("  %s: %d\n", name, reasons[name])
+		}
+		fmt.Println()
+	}
+
+	if probes := resp.GetProbes(); len(probes) > 0 {
+		fmt.Println("Probes")
+		names := sortedKeys(probes)
+		for _, name := range names {
+			counters := probes[name]
+			fmt.Printf("  %s: total=%d success=%d failure=%d\n", name, counters.GetTotal(), counters.GetSuccess(), counters.GetFailure())
+		}
+		fmt.Println()
+	}
+
+	if tasksByID := resp.GetTasksById(); len(tasksByID) > 0 {
+		fmt.Println("Tasks By ID")
+		names := sortedKeys(tasksByID)
+		for _, name := range names {
+			counters := tasksByID[name]
+			fmt.Printf("  %s: scheduled=%d rescheduled=%d executing=%d executed=%d cancelled=%d failed=%d\n",
+				name,
+				counters.GetScheduled(),
+				counters.GetRescheduled(),
+				counters.GetExecuting(),
+				counters.GetExecuted(),
+				counters.GetCancelled(),
+				counters.GetFailed(),
+			)
+		}
+	}
+}
+
 func printWatchStatus(resp *netmonv1.GetStatusResponse) {
 	timestamp := time.Now().Local().Format(time.RFC3339)
 	fmt.Printf("[%s] %-4s %s\n", timestamp, formatSeverity(resp.GetOverallSeverity()), defaultString(resp.GetSummary(), "healthy"))
@@ -601,6 +721,8 @@ func formatTaskEventKind(kind netmonv1.TaskEventKind) string {
 		return "scheduled"
 	case netmonv1.TaskEventKind_TASK_EVENT_KIND_RESCHEDULED:
 		return "rescheduled"
+	case netmonv1.TaskEventKind_TASK_EVENT_KIND_EXECUTING:
+		return "executing"
 	case netmonv1.TaskEventKind_TASK_EVENT_KIND_EXECUTED:
 		return "executed"
 	case netmonv1.TaskEventKind_TASK_EVENT_KIND_CANCELLED:
@@ -610,6 +732,15 @@ func formatTaskEventKind(kind netmonv1.TaskEventKind) string {
 	default:
 		return "unknown"
 	}
+}
+
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func isCanceledError(err error) bool {

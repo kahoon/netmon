@@ -5,6 +5,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/kahoon/netmon/internal/events"
 	"github.com/kahoon/pending"
 	"github.com/vishvananda/netlink"
 )
@@ -12,6 +13,9 @@ import (
 const runtimeStatsTaskID = "runtime:stats"
 
 func (m *Monitor) Run(ctx context.Context) error {
+	ctx = events.WithHub(ctx, m.bus)
+	// Start the stats consumer to process events and update metrics.
+	m.startStatsConsumer(ctx)
 	// Mark the monitor as running, and capture the initial stats interval for scheduling the first stats reporter.
 	m.mu.Lock()
 	m.running = true
@@ -93,6 +97,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			if upd.Attrs().Name != m.cfg.MonitorInterface {
 				continue
 			}
+			events.Emit(ctx, events.LinkEvent{At: time.Now().Local()})
 			if m.debug {
 				log.Printf("link event: if=%s oper=%s flags=%s", upd.Attrs().Name, upd.Attrs().OperState.String(), upd.Attrs().Flags.String())
 			}
@@ -105,6 +110,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			if upd.LinkAddress.IP == nil {
 				continue
 			}
+			events.Emit(ctx, events.AddrEvent{At: time.Now().Local()})
 			if m.debug {
 				log.Printf("addr event: new=%t addr=%s", upd.NewAddr, upd.LinkAddress.String())
 			}
@@ -114,6 +120,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 			if upd.LinkIndex != m.CurrentLinkIndex() {
 				continue
 			}
+			events.Emit(ctx, events.RouteEvent{At: time.Now().Local()})
 			if m.debug {
 				log.Printf("route event: type=%d dst=%v gw=%v", upd.Type, upd.Dst, upd.Gw)
 			}
@@ -129,6 +136,24 @@ func (m *Monitor) Run(ctx context.Context) error {
 			scheduleSkipIfRunning("refresh:upstream", "upstream poll", m.RefreshUpstream)
 		}
 	}
+}
+
+func (m *Monitor) startStatsConsumer(ctx context.Context) {
+	sub := m.bus.Subscribe(events.WithoutReplay())
+	go func() {
+		defer sub.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-sub.Events():
+				if !ok {
+					return
+				}
+				m.stats.Handle(event)
+			}
+		}
+	}()
 }
 
 func (m *Monitor) scheduleRuntimeStats(interval time.Duration) error {

@@ -1,12 +1,13 @@
 package trace
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"maps"
 	"time"
+
+	"github.com/kahoon/netmon/internal/events"
 )
 
 const (
@@ -34,43 +35,28 @@ type Sink interface {
 	Emit(Event)
 }
 
-type sinkKey struct{}
-type traceIDKey struct{}
-
-func With(ctx context.Context, traceID string, sink Sink) (withCtx context.Context) {
-	withCtx = ctx
-	if sink != nil {
-		withCtx = context.WithValue(withCtx, sinkKey{}, sink)
-	}
-	if traceID != "" {
-		withCtx = context.WithValue(withCtx, traceIDKey{}, traceID)
-	}
-	return withCtx
+type FormatterSink struct {
+	traceID string
+	sink    Sink
 }
 
-func TraceIDAndSinkFromContext(ctx context.Context) (traceID string, sink Sink) {
-	if ctx == nil {
-		return "", nil
+func NewFormatterSink(traceID string, sink Sink) *FormatterSink {
+	return &FormatterSink{
+		traceID: traceID,
+		sink:    sink,
 	}
-	traceID, _ = ctx.Value(traceIDKey{}).(string)
-	sink, _ = ctx.Value(sinkKey{}).(Sink)
-	return traceID, sink
 }
 
-func Emit(ctx context.Context, kind, message string, fields map[string]string) {
-	traceID, sink := TraceIDAndSinkFromContext(ctx)
-	if sink == nil {
+func (s *FormatterSink) Handle(event events.Event) {
+	if s == nil || s.sink == nil {
 		return
 	}
-	cloned := make(map[string]string, len(fields))
-	maps.Copy(cloned, fields)
-	sink.Emit(Event{
-		TraceID: traceID,
-		At:      time.Now().Local(),
-		Kind:    kind,
-		Message: message,
-		Fields:  cloned,
-	})
+
+	formatted, ok := formatEvent(s.traceID, event)
+	if !ok {
+		return
+	}
+	s.sink.Emit(formatted)
 }
 
 func NewTraceID() string {
@@ -81,83 +67,169 @@ func NewTraceID() string {
 	return hex.EncodeToString(raw[:])
 }
 
-func TraceCollector[T any](ctx context.Context, name, reason string, fn func(context.Context) (T, error)) (T, error) {
-	started := time.Now()
-	Emit(ctx, EventCollectorStarted, "collector started", map[string]string{
-		"collector": name,
-		"reason":    reason,
-	})
-
-	value, err := fn(ctx)
-	if err != nil {
-		var zero T
-		return zero, err
+func formatEvent(traceID string, event events.Event) (Event, bool) {
+	switch e := event.(type) {
+	case events.TraceStarted:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventTraceStarted,
+			Message: "trace started",
+			Fields: map[string]string{
+				"scope": e.Scope,
+			},
+		}, true
+	case events.RefreshRequested:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventRefreshRequested,
+			Message: "refresh requested",
+			Fields: map[string]string{
+				"scope": e.Scope,
+			},
+		}, true
+	case events.CollectorStarted:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventCollectorStarted,
+			Message: "collector started",
+			Fields: map[string]string{
+				"collector": e.Collector,
+				"reason":    e.Reason,
+			},
+		}, true
+	case events.CollectorFinished:
+		fields := map[string]string{
+			"collector": e.Collector,
+			"reason":    e.Reason,
+			"duration":  e.Duration.String(),
+		}
+		if e.Error != "" {
+			fields["error"] = e.Error
+		}
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventCollectorFinished,
+			Message: "collector finished",
+			Fields:  fields,
+		}, true
+	case events.ProbeResult:
+		fields := map[string]string{
+			"probe_kind": e.Kind,
+			"family":     e.Family,
+			"status":     e.Status,
+		}
+		if e.Target != "" {
+			fields["target"] = e.Target
+		}
+		if e.Provider != "" {
+			fields["provider"] = e.Provider
+		}
+		if e.Responder != "" {
+			fields["responder"] = e.Responder
+		}
+		if e.IP != "" {
+			fields["ip"] = e.IP
+		}
+		if e.Latency != 0 {
+			fields["latency"] = e.Latency.String()
+		}
+		if e.Detail != "" {
+			fields["detail"] = e.Detail
+		}
+		if e.Rcode != "" {
+			fields["rcode"] = e.Rcode
+		}
+		if e.AD {
+			fields["ad"] = "true"
+		}
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventProbeResult,
+			Message: "probe result",
+			Fields:  fields,
+		}, true
+	case events.ChecksEvaluated:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventChecksChanged,
+			Message: "checks evaluated",
+			Fields: map[string]string{
+				"reason":  e.Reason,
+				"changed": fmt.Sprintf("%d", e.Changed),
+				"passed":  fmt.Sprintf("%d", e.Passed),
+				"failed":  fmt.Sprintf("%d", e.Failed),
+			},
+		}, true
+	case events.NotificationSent:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventNotificationSent,
+			Message: "notification sent",
+			Fields: map[string]string{
+				"title":    e.Title,
+				"severity": e.Severity,
+			},
+		}, true
+	case events.NotificationSkipped:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventNotificationSkipped,
+			Message: "notification skipped",
+			Fields: map[string]string{
+				"reason": e.Reason,
+			},
+		}, true
+	case events.NotificationFailed:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    "notification_failed",
+			Message: "notification failed",
+			Fields: map[string]string{
+				"error": e.Error,
+			},
+		}, true
+	case events.TraceCompleted:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventTraceCompleted,
+			Message: "trace completed",
+			Fields: map[string]string{
+				"scope":    e.Scope,
+				"duration": e.Duration.String(),
+			},
+		}, true
+	case events.TraceFailed:
+		return Event{
+			TraceID: traceID,
+			At:      e.At,
+			Kind:    EventTraceFailed,
+			Message: "trace failed",
+			Fields: map[string]string{
+				"scope":    e.Scope,
+				"duration": e.Duration.String(),
+				"error":    e.Error,
+			},
+		}, true
+	default:
+		return Event{}, false
 	}
-
-	Emit(ctx, EventCollectorFinished, "collector finished", map[string]string{
-		"collector": name,
-		"reason":    reason,
-		"duration":  time.Since(started).String(),
-	})
-	return value, nil
 }
 
-type ProbeResultFields struct {
-	Kind      string
-	Family    string
-	Target    string
-	Provider  string
-	Status    string
-	Latency   time.Duration
-	Responder string
-	Detail    string
-	IP        string
-}
-
-func EmitProbeResult(ctx context.Context, result ProbeResultFields) {
-	fields := map[string]string{
-		"probe_kind": result.Kind,
-		"family":     result.Family,
-		"status":     result.Status,
+func cloneFields(fields map[string]string) map[string]string {
+	if len(fields) == 0 {
+		return nil
 	}
-	if result.Target != "" {
-		fields["target"] = result.Target
-	}
-	if result.Provider != "" {
-		fields["provider"] = result.Provider
-	}
-	if result.Responder != "" {
-		fields["responder"] = result.Responder
-	}
-	if result.IP != "" {
-		fields["ip"] = result.IP
-	}
-	if result.Latency != 0 {
-		fields["latency"] = result.Latency.String()
-	}
-	if result.Detail != "" {
-		fields["detail"] = result.Detail
-	}
-
-	Emit(ctx, EventProbeResult, "probe result", fields)
-}
-
-func EmitNotificationSent(ctx context.Context, title, severity string) {
-	Emit(ctx, EventNotificationSent, "notification sent", map[string]string{
-		"title":    title,
-		"severity": severity,
-	})
-}
-
-func EmitNotificationSkipped(ctx context.Context, reason string) {
-	Emit(ctx, EventNotificationSkipped, "notification skipped", map[string]string{
-		"reason": reason,
-	})
-}
-
-func EmitChecksChanged(ctx context.Context, reason string, changed int) {
-	Emit(ctx, EventChecksChanged, "checks evaluated", map[string]string{
-		"reason":  reason,
-		"changed": fmt.Sprintf("%d", changed),
-	})
+	cloned := make(map[string]string, len(fields))
+	maps.Copy(cloned, fields)
+	return cloned
 }

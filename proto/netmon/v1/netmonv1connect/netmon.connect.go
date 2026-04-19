@@ -47,6 +47,8 @@ const (
 	NetmonServiceGetStateProcedure = "/netmon.v1.NetmonService/GetState"
 	// NetmonServiceGetInfoProcedure is the fully-qualified name of the NetmonService's GetInfo RPC.
 	NetmonServiceGetInfoProcedure = "/netmon.v1.NetmonService/GetInfo"
+	// NetmonServiceGetStatsProcedure is the fully-qualified name of the NetmonService's GetStats RPC.
+	NetmonServiceGetStatsProcedure = "/netmon.v1.NetmonService/GetStats"
 	// NetmonServiceRefreshProcedure is the fully-qualified name of the NetmonService's Refresh RPC.
 	NetmonServiceRefreshProcedure = "/netmon.v1.NetmonService/Refresh"
 	// NetmonServiceSetDebugProcedure is the fully-qualified name of the NetmonService's SetDebug RPC.
@@ -64,6 +66,7 @@ type NetmonServiceClient interface {
 	Trace(context.Context, *connect.Request[v1.TraceRequest]) (*connect.ServerStreamForClient[v1.TraceResponse], error)
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
+	GetStats(context.Context, *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
 	SetDebug(context.Context, *connect.Request[v1.SetDebugRequest]) (*connect.Response[v1.SetDebugResponse], error)
 	SetRuntimeStatsInterval(context.Context, *connect.Request[v1.SetRuntimeStatsIntervalRequest]) (*connect.Response[v1.SetRuntimeStatsIntervalResponse], error)
@@ -116,6 +119,12 @@ func NewNetmonServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(netmonServiceMethods.ByName("GetInfo")),
 			connect.WithClientOptions(opts...),
 		),
+		getStats: connect.NewClient[v1.GetStatsRequest, v1.GetStatsResponse](
+			httpClient,
+			baseURL+NetmonServiceGetStatsProcedure,
+			connect.WithSchema(netmonServiceMethods.ByName("GetStats")),
+			connect.WithClientOptions(opts...),
+		),
 		refresh: connect.NewClient[v1.RefreshRequest, v1.RefreshResponse](
 			httpClient,
 			baseURL+NetmonServiceRefreshProcedure,
@@ -145,6 +154,7 @@ type netmonServiceClient struct {
 	trace                   *connect.Client[v1.TraceRequest, v1.TraceResponse]
 	getState                *connect.Client[v1.GetStateRequest, v1.GetStateResponse]
 	getInfo                 *connect.Client[v1.GetInfoRequest, v1.GetInfoResponse]
+	getStats                *connect.Client[v1.GetStatsRequest, v1.GetStatsResponse]
 	refresh                 *connect.Client[v1.RefreshRequest, v1.RefreshResponse]
 	setDebug                *connect.Client[v1.SetDebugRequest, v1.SetDebugResponse]
 	setRuntimeStatsInterval *connect.Client[v1.SetRuntimeStatsIntervalRequest, v1.SetRuntimeStatsIntervalResponse]
@@ -180,6 +190,11 @@ func (c *netmonServiceClient) GetInfo(ctx context.Context, req *connect.Request[
 	return c.getInfo.CallUnary(ctx, req)
 }
 
+// GetStats calls netmon.v1.NetmonService.GetStats.
+func (c *netmonServiceClient) GetStats(ctx context.Context, req *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error) {
+	return c.getStats.CallUnary(ctx, req)
+}
+
 // Refresh calls netmon.v1.NetmonService.Refresh.
 func (c *netmonServiceClient) Refresh(ctx context.Context, req *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error) {
 	return c.refresh.CallUnary(ctx, req)
@@ -203,6 +218,7 @@ type NetmonServiceHandler interface {
 	Trace(context.Context, *connect.Request[v1.TraceRequest], *connect.ServerStream[v1.TraceResponse]) error
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
+	GetStats(context.Context, *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
 	SetDebug(context.Context, *connect.Request[v1.SetDebugRequest]) (*connect.Response[v1.SetDebugResponse], error)
 	SetRuntimeStatsInterval(context.Context, *connect.Request[v1.SetRuntimeStatsIntervalRequest]) (*connect.Response[v1.SetRuntimeStatsIntervalResponse], error)
@@ -251,6 +267,12 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(netmonServiceMethods.ByName("GetInfo")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netmonServiceGetStatsHandler := connect.NewUnaryHandler(
+		NetmonServiceGetStatsProcedure,
+		svc.GetStats,
+		connect.WithSchema(netmonServiceMethods.ByName("GetStats")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netmonServiceRefreshHandler := connect.NewUnaryHandler(
 		NetmonServiceRefreshProcedure,
 		svc.Refresh,
@@ -283,6 +305,8 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 			netmonServiceGetStateHandler.ServeHTTP(w, r)
 		case NetmonServiceGetInfoProcedure:
 			netmonServiceGetInfoHandler.ServeHTTP(w, r)
+		case NetmonServiceGetStatsProcedure:
+			netmonServiceGetStatsHandler.ServeHTTP(w, r)
 		case NetmonServiceRefreshProcedure:
 			netmonServiceRefreshHandler.ServeHTTP(w, r)
 		case NetmonServiceSetDebugProcedure:
@@ -320,6 +344,10 @@ func (UnimplementedNetmonServiceHandler) GetState(context.Context, *connect.Requ
 
 func (UnimplementedNetmonServiceHandler) GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.GetInfo is not implemented"))
+}
+
+func (UnimplementedNetmonServiceHandler) GetStats(context.Context, *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.GetStats is not implemented"))
 }
 
 func (UnimplementedNetmonServiceHandler) Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error) {

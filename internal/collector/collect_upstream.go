@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kahoon/netmon/internal/events"
 	"github.com/kahoon/netmon/internal/model"
-	"github.com/kahoon/netmon/internal/trace"
 	"github.com/miekg/dns"
 )
 
@@ -532,7 +532,8 @@ func formatObservationFailure(observation model.PublicIPObservation) string {
 }
 
 func emitProbeTrace(ctx context.Context, kind, network, target, provider string, probe model.DNSProbeResult) {
-	trace.EmitProbeResult(ctx, trace.ProbeResultFields{
+	events.Emit(ctx, events.ProbeResult{
+		At:        time.Now().Local(),
 		Kind:      kind,
 		Family:    familyFromNetwork(network),
 		Target:    target,
@@ -545,7 +546,8 @@ func emitProbeTrace(ctx context.Context, kind, network, target, provider string,
 }
 
 func emitObservationTrace(ctx context.Context, network, provider string, observation model.PublicIPObservation) {
-	trace.EmitProbeResult(ctx, trace.ProbeResultFields{
+	events.Emit(ctx, events.ProbeResult{
+		At:       time.Now().Local(),
 		Kind:     "public_ip",
 		Family:   familyFromNetwork(network),
 		Provider: provider,
@@ -558,7 +560,8 @@ func emitObservationTrace(ctx context.Context, network, provider string, observa
 }
 
 func emitDNSSECTrace(ctx context.Context, kind string, attempt model.DNSSECProbeAttempt) {
-	trace.EmitProbeResult(ctx, trace.ProbeResultFields{
+	events.Emit(ctx, events.ProbeResult{
+		At:       time.Now().Local(),
 		Kind:     kind,
 		Family:   "local",
 		Target:   attempt.Target,
@@ -566,6 +569,8 @@ func emitDNSSECTrace(ctx context.Context, kind string, attempt model.DNSSECProbe
 		Latency:  attempt.Latency,
 		Detail:   attempt.Detail,
 		Provider: "unbound",
+		Rcode:    attempt.Rcode,
+		AD:       attempt.AD,
 	})
 }
 

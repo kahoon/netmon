@@ -8,8 +8,9 @@ import (
 
 	"github.com/kahoon/netmon/internal/collector"
 	"github.com/kahoon/netmon/internal/config"
+	"github.com/kahoon/netmon/internal/events"
 	"github.com/kahoon/netmon/internal/model"
-	"github.com/kahoon/netmon/internal/trace"
+	"github.com/kahoon/netmon/internal/stats"
 	"github.com/kahoon/pending"
 )
 
@@ -31,11 +32,12 @@ type Monitor struct {
 	running              bool
 	runtimeStatsInterval time.Duration
 
-	statusBroadcaster *broadcaster[StatusView]
-	taskBroadcaster   *broadcaster[TaskEvent]
+	bus   *events.Hub
+	stats *stats.Recorder
 }
 
 func NewMonitor(cfg config.Config) *Monitor {
+	recorder := stats.NewRecorder()
 	monitor := &Monitor{
 		cfg:                  cfg,
 		notifier:             NewNtfyNotifier(cfg),
@@ -45,18 +47,11 @@ func NewMonitor(cfg config.Config) *Monitor {
 		debug:                cfg.DebugEvents,
 		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
-
-		statusBroadcaster: newBroadcaster[StatusView](
-			withBuffer[StatusView](1),
-			withClone[StatusView](cloneStatusView),
-			withOverflow[StatusView](overflowReplace),
+		bus: events.NewHub(
+			events.WithBuffer(64),
+			events.WithHistory(64),
 		),
-		taskBroadcaster: newBroadcaster[TaskEvent](
-			withBuffer[TaskEvent](64),
-			withClone[TaskEvent](cloneTaskEvent),
-			withOverflow[TaskEvent](overflowDropOldest),
-			withHistory[TaskEvent](64),
-		),
+		stats: recorder,
 	}
 	// Initialize the pending manager with a telemetry implementation that reports to the monitor's logger.
 	// This allows us to track pending operations and their durations.
@@ -111,7 +106,8 @@ func (m *Monitor) CurrentLinkIndex() int {
 }
 
 func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
-	state, err := trace.TraceCollector(ctx, "interface", reason, func(context.Context) (model.InterfaceState, error) {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "interface", reason, func(context.Context) (model.InterfaceState, error) {
 		return m.interfaceCollector.Collect(m.cfg.MonitorInterface)
 	})
 	if err != nil {
@@ -127,7 +123,8 @@ func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
 }
 
 func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
-	state, err := trace.TraceCollector(ctx, "listeners", reason, func(context.Context) (model.ListenerState, error) {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "listeners", reason, func(context.Context) (model.ListenerState, error) {
 		return m.listenerCollector.Collect()
 	})
 	if err != nil {
@@ -143,7 +140,8 @@ func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
 }
 
 func (m *Monitor) RefreshUpstream(ctx context.Context, reason string) error {
-	state, err := trace.TraceCollector(ctx, "upstream", reason, func(context.Context) (model.UpstreamState, error) {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "upstream", reason, func(context.Context) (model.UpstreamState, error) {
 		return m.upstreamCollector.Collect(ctx), nil
 	})
 	if err != nil {
@@ -172,33 +170,61 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 	m.checks = nextChecks
 	m.mu.Unlock()
 
+	ctx = events.WithHub(ctx, m.bus)
+
 	if !statusViewsEqual(previousView, nextView) {
-		m.broadcastStatus(nextView)
+		m.bus.Emit(events.StatusChanged{
+			At:     time.Now().Local(),
+			Status: cloneStatusView(nextView),
+		})
 	}
 
 	changed := changedCheckCount(previousChecks, nextChecks)
-	trace.EmitChecksChanged(ctx, reason, changed)
+	passed, failed := checkOutcomeCounts(nextChecks)
+	events.Emit(ctx, events.ChecksEvaluated{
+		At:      time.Now().Local(),
+		Reason:  reason,
+		Changed: changed,
+		Passed:  passed,
+		Failed:  failed,
+	})
 
 	note := BuildChangeNotification(m.cfg, reason, previousState, nextState, previousChecks, nextChecks)
 	if note == nil {
-		trace.EmitNotificationSkipped(ctx, "no effective changes")
+		events.Emit(ctx, events.NotificationSkipped{
+			At:     time.Now().Local(),
+			Reason: "no effective changes",
+		})
 		return
 	}
 
 	if err := m.notifier.Send(ctx, *note); err != nil {
 		log.Printf("notify failed: %v", err)
+		events.Emit(ctx, events.NotificationFailed{
+			At:    time.Now().Local(),
+			Error: err.Error(),
+		})
 		return
 	}
 
 	log.Printf("notification sent: %s", note.Title)
-	trace.EmitNotificationSent(ctx, note.Title, note.Severity.String())
+	events.Emit(ctx, events.NotificationSent{
+		At:       time.Now().Local(),
+		Title:    note.Title,
+		Severity: note.Severity.String(),
+	})
 }
 
 func (m *Monitor) notifyError(ctx context.Context, reason string, err error) {
+	ctx = events.WithHub(ctx, m.bus)
 	log.Printf("%s failed: %v", reason, err)
 	note := BuildErrorNotification(m.cfg, reason, err)
 	if notifyErr := m.notifier.Send(ctx, note); notifyErr != nil {
 		log.Printf("notify failed: %v", notifyErr)
+		events.Emit(ctx, events.NotificationFailed{
+			At:    time.Now().Local(),
+			Error: notifyErr.Error(),
+		})
 	}
 }
 
@@ -207,19 +233,19 @@ func (m *Monitor) subscribeStatus() StatusSubscription {
 	initial := statusViewFromSnapshot(m.state, m.checks)
 	m.mu.Unlock()
 
-	return m.statusBroadcaster.Subscribe(initial)
-}
-
-func (m *Monitor) broadcastStatus(view StatusView) {
-	m.statusBroadcaster.Broadcast(view)
+	sub := m.bus.Subscribe(
+		events.WithFilter(statusEventsOnly),
+		events.WithInitial(events.StatusChanged{
+			At:     time.Now().Local(),
+			Status: cloneStatusView(initial),
+		}),
+	)
+	return newStatusSubscription(sub)
 }
 
 func (m *Monitor) subscribeTasks() TaskSubscription {
-	return m.taskBroadcaster.Subscribe()
-}
-
-func (m *Monitor) broadcastTaskEvent(event TaskEvent) {
-	m.taskBroadcaster.Broadcast(event)
+	sub := m.bus.Subscribe(events.WithFilter(taskEventsOnly))
+	return newTaskSubscription(sub)
 }
 
 func changedCheckCount(previous, current model.CheckSet) int {
@@ -231,4 +257,45 @@ func changedCheckCount(previous, current model.CheckSet) int {
 		count++
 	}
 	return count
+}
+
+func collectWithEvents[T any](ctx context.Context, name, reason string, fn func(context.Context) (T, error)) (T, error) {
+	started := time.Now().Local()
+	events.Emit(ctx, events.CollectorStarted{
+		At:        started,
+		Collector: name,
+		Reason:    reason,
+	})
+
+	value, err := fn(ctx)
+	if err != nil {
+		events.Emit(ctx, events.CollectorFinished{
+			At:        time.Now().Local(),
+			Collector: name,
+			Reason:    reason,
+			Duration:  time.Since(started),
+			Error:     err.Error(),
+		})
+		var zero T
+		return zero, err
+	}
+
+	events.Emit(ctx, events.CollectorFinished{
+		At:        time.Now().Local(),
+		Collector: name,
+		Reason:    reason,
+		Duration:  time.Since(started),
+	})
+	return value, nil
+}
+
+func checkOutcomeCounts(checks model.CheckSet) (passed int, failed int) {
+	for _, result := range checks {
+		if result.Severity == model.SeverityOK {
+			passed++
+			continue
+		}
+		failed++
+	}
+	return passed, failed
 }

@@ -4,7 +4,7 @@ go 1.26.1
 
 require (
 	connectrpc.com/connect v1.19.1
-	github.com/kahoon/pending v0.4.0
+	github.com/kahoon/pending v0.5.0
 	github.com/kahoon/ring v0.5.0
 	github.com/miekg/dns v1.1.72
 	github.com/vishvananda/netlink v1.3.1
