@@ -18,6 +18,7 @@ const (
 	defaultInterfaceInterval    = 10 * time.Minute
 	defaultListenerInterval     = 10 * time.Minute
 	defaultUpstreamInterval     = 5 * time.Minute
+	defaultUnboundInterval      = 5 * time.Minute
 	defaultHTTPTimeout          = 10 * time.Second
 	defaultDNSProbeTimeout      = 2 * time.Second
 	defaultRuntimeStatsInterval = 7 * 24 * time.Hour
@@ -40,6 +41,7 @@ type Config struct {
 	InterfacePollInterval time.Duration
 	ListenerPollInterval  time.Duration
 	UpstreamPollInterval  time.Duration
+	UnboundPollInterval   time.Duration
 	HTTPTimeout           time.Duration
 	DNSProbeTimeout       time.Duration
 	RuntimeStatsInterval  time.Duration
@@ -59,6 +61,7 @@ func LoadConfig() Config {
 		InterfacePollInterval: defaultInterfaceInterval,
 		ListenerPollInterval:  defaultListenerInterval,
 		UpstreamPollInterval:  defaultUpstreamInterval,
+		UnboundPollInterval:   getenvDuration("UNBOUND_POLL_INTERVAL", defaultUnboundInterval),
 		HTTPTimeout:           defaultHTTPTimeout,
 		DNSProbeTimeout:       defaultDNSProbeTimeout,
 		RuntimeStatsInterval:  getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),

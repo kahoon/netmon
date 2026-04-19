@@ -34,6 +34,7 @@ enum RefreshScope {
   REFRESH_SCOPE_INTERFACE = 2;
   REFRESH_SCOPE_LISTENERS = 3;
   REFRESH_SCOPE_UPSTREAM = 4;
+  REFRESH_SCOPE_UNBOUND = 5;
 }
 
 enum TaskEventKind {
@@ -165,13 +166,19 @@ message UpstreamState {
   DnsProbeResult recursive_v6 = 4;
   PublicIPObservation public_ipv4 = 5;
   PublicIPObservation public_ipv6 = 6;
-  DnssecProbeResult dnssec = 7;
+  reserved 7;
+  reserved "dnssec";
+}
+
+message UnboundState {
+  DnssecProbeResult dnssec = 1;
 }
 
 message GetStateResponse {
   InterfaceState interface = 1;
   ListenerState listeners = 2;
   UpstreamState upstream = 3;
+  UnboundState unbound = 4;
 }
 
 message GetInfoRequest {}
@@ -187,6 +194,7 @@ message GetInfoResponse {
   string ntfy_host = 8;
   string commit = 9;
   string build_time = 10;
+  string unbound_poll = 11;
 }
 
 message GetStatsRequest {}

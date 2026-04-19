@@ -49,7 +49,7 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, exposureCheck(checkExpose5335UDP, "5335/udp", state.Listeners.Resolver5335UDP))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.RootDNSV4, state.Upstream.RecursiveDNSV4))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.RootDNSV6, state.Upstream.RecursiveDNSV6))
-	addCheck(checks, dnssecValidationCheck(state.Upstream.DNSSEC))
+	addCheck(checks, dnssecValidationCheck(state.Unbound.DNSSEC))
 	return checks
 }
 

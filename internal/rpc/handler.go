@@ -147,7 +147,9 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 			RecursiveV6: mapDNSProbe(state.Upstream.RecursiveDNSV6),
 			PublicIpv4:  mapPublicIPObservation(state.Upstream.PublicIPv4),
 			PublicIpv6:  mapPublicIPObservation(state.Upstream.PublicIPv6),
-			Dnssec:      mapDNSSECProbeResult(state.Upstream.DNSSEC),
+		},
+		Unbound: &netmonv1.UnboundState{
+			Dnssec: mapDNSSECProbeResult(state.Unbound.DNSSEC),
 		},
 	}), nil
 }
@@ -165,6 +167,7 @@ func (h *Handler) GetInfo(ctx context.Context, _ *connect.Request[netmonv1.GetIn
 		InterfacePoll:        info.InterfacePoll.String(),
 		ListenerPoll:         info.ListenerPoll.String(),
 		UpstreamPoll:         info.UpstreamPoll.String(),
+		UnboundPoll:          info.UnboundPoll.String(),
 		RuntimeStatsInterval: info.RuntimeStatsInterval.String(),
 		NtfyHost:             info.NtfyHost,
 		Commit:               info.Commit,
@@ -370,6 +373,8 @@ func mapRefreshScope(scope netmonv1.RefreshScope) (monitor.RefreshScope, error) 
 		return monitor.RefreshScopeListeners, nil
 	case netmonv1.RefreshScope_REFRESH_SCOPE_UPSTREAM:
 		return monitor.RefreshScopeUpstream, nil
+	case netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND:
+		return monitor.RefreshScopeUnbound, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope: %s", scope.String())
 	}

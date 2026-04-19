@@ -22,6 +22,7 @@ type Monitor struct {
 	interfaceCollector collector.InterfaceCollector
 	listenerCollector  collector.ListenerCollector
 	upstreamCollector  collector.UpstreamCollector
+	unboundCollector   collector.UnboundCollector
 
 	mu     sync.Mutex
 	state  model.SystemState
@@ -44,6 +45,7 @@ func NewMonitor(cfg config.Config) *Monitor {
 		interfaceCollector:   collector.InterfaceCollector{},
 		listenerCollector:    collector.ListenerCollector{},
 		upstreamCollector:    collector.UpstreamCollector{ProbeTimeout: cfg.DNSProbeTimeout},
+		unboundCollector:     collector.UnboundCollector{ProbeTimeout: cfg.DNSProbeTimeout},
 		debug:                cfg.DebugEvents,
 		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
@@ -72,10 +74,12 @@ func (m *Monitor) Initialize(ctx context.Context) error {
 	}
 
 	upstream := m.upstreamCollector.Collect(ctx)
+	unbound := m.unboundCollector.Collect(ctx)
 	state := model.SystemState{
 		Interface: iface,
 		Listeners: listeners,
 		Upstream:  upstream,
+		Unbound:   unbound,
 	}
 	checks := model.EvaluateChecks(m.cfg.ExpectedULA, state)
 
@@ -150,6 +154,22 @@ func (m *Monitor) RefreshUpstream(ctx context.Context, reason string) error {
 
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Upstream = state
+	})
+
+	return nil
+}
+
+func (m *Monitor) RefreshUnbound(ctx context.Context, reason string) error {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "unbound", reason, func(context.Context) (model.UnboundState, error) {
+		return m.unboundCollector.Collect(ctx), nil
+	})
+	if err != nil {
+		return err
+	}
+
+	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
+		current.Unbound = state
 	})
 
 	return nil

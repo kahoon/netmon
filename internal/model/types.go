@@ -110,15 +110,19 @@ type UpstreamState struct {
 	RootDNSV6      DNSProbeResult
 	RecursiveDNSV4 DNSProbeResult
 	RecursiveDNSV6 DNSProbeResult
-	DNSSEC         DNSSECProbeResult
 	PublicIPv4     PublicIPObservation
 	PublicIPv6     PublicIPObservation
+}
+
+type UnboundState struct {
+	DNSSEC DNSSECProbeResult
 }
 
 type SystemState struct {
 	Interface InterfaceState
 	Listeners ListenerState
 	Upstream  UpstreamState
+	Unbound   UnboundState
 }
 
 type SocketProbe struct {

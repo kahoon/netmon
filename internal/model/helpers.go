@@ -58,9 +58,11 @@ func CopySystemState(in SystemState) SystemState {
 			RootDNSV6:      in.Upstream.RootDNSV6,
 			RecursiveDNSV4: in.Upstream.RecursiveDNSV4,
 			RecursiveDNSV6: in.Upstream.RecursiveDNSV6,
-			DNSSEC:         in.Upstream.DNSSEC,
 			PublicIPv4:     in.Upstream.PublicIPv4,
 			PublicIPv6:     in.Upstream.PublicIPv6,
+		},
+		Unbound: UnboundState{
+			DNSSEC: in.Unbound.DNSSEC,
 		},
 	}
 }

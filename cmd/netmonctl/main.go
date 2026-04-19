@@ -128,7 +128,7 @@ func runTrace(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContextWithTimeout(spec, args, forever, func(fs *flag.FlagSet) {
 		fs.BoolVar(&noTraceID, "no-trace-id", false, "Don't include a trace ID in emitted events (for testing)")
-		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream")
+		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream, unbound")
 	})
 	defer cmd.cancel()
 
@@ -260,6 +260,7 @@ func runInfo(spec commandSpec, args []string) {
 	fmt.Printf("Interface Poll:     %s\n", resp.Msg.GetInterfacePoll())
 	fmt.Printf("Listener Poll:      %s\n", resp.Msg.GetListenerPoll())
 	fmt.Printf("Upstream Poll:      %s\n", resp.Msg.GetUpstreamPoll())
+	fmt.Printf("Unbound Poll:       %s\n", resp.Msg.GetUnboundPoll())
 	fmt.Printf("Runtime Stats:      %s\n", resp.Msg.GetRuntimeStatsInterval())
 	fmt.Printf("Notify Host:        %s\n", resp.Msg.GetNtfyHost())
 	fmt.Printf("RPC Socket:         %s\n", cmd.socketPath)
@@ -268,7 +269,7 @@ func runInfo(spec commandSpec, args []string) {
 func runRefresh(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContext(spec, args, func(fs *flag.FlagSet) {
-		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream")
+		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream, unbound")
 	})
 	defer cmd.cancel()
 
@@ -392,6 +393,8 @@ func parseRefreshScope(value string) (netmonv1.RefreshScope, error) {
 		return netmonv1.RefreshScope_REFRESH_SCOPE_LISTENERS, nil
 	case "upstream":
 		return netmonv1.RefreshScope_REFRESH_SCOPE_UPSTREAM, nil
+	case "unbound":
+		return netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope %q", value)
 	}
@@ -412,6 +415,8 @@ func canonicalRefreshScope(scope netmonv1.RefreshScope) string {
 		return "listeners"
 	case netmonv1.RefreshScope_REFRESH_SCOPE_UPSTREAM:
 		return "upstream"
+	case netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND:
+		return "unbound"
 	default:
 		return "all"
 	}
@@ -467,11 +472,13 @@ func printState(resp *netmonv1.GetStateResponse) {
 	printDNSProbe("Root DNS IPv6", resp.GetUpstream().GetRootV6())
 	printDNSProbe("Recursive DNS IPv4", resp.GetUpstream().GetRecursiveV4())
 	printDNSProbe("Recursive DNS IPv6", resp.GetUpstream().GetRecursiveV6())
-	printDNSSECProbe("DNSSEC Positive", resp.GetUpstream().GetDnssec().GetPositive())
-	printDNSSECProbe("DNSSEC Negative", resp.GetUpstream().GetDnssec().GetNegative())
-	publicIPv4 := resp.GetUpstream().GetPublicIpv4()
-	printPublicIPObservation("Public IPv4", publicIPv4)
+	printPublicIPObservation("Public IPv4", resp.GetUpstream().GetPublicIpv4())
 	printPublicIPObservation("Public IPv6", resp.GetUpstream().GetPublicIpv6())
+
+	fmt.Println()
+	fmt.Println("Unbound")
+	printDNSSECProbe("DNSSEC Positive", resp.GetUnbound().GetDnssec().GetPositive())
+	printDNSSECProbe("DNSSEC Negative", resp.GetUnbound().GetDnssec().GetNegative())
 }
 
 func printStats(resp *netmonv1.GetStatsResponse) {

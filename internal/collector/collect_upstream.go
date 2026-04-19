@@ -17,10 +17,6 @@ const (
 	dnsPort          = "53"
 	dnsRoot          = "."
 	rootServerSuffix = ".root-servers.net."
-	localUnbound     = "127.0.0.1"
-	localUnboundPort = "5335"
-	dnssecPositive   = "internetsociety.org."
-	dnssecNegative   = "dnssec-failed.org."
 )
 
 type rootTarget struct {
@@ -78,7 +74,6 @@ func (c UpstreamCollector) Collect(ctx context.Context) model.UpstreamState {
 		RootDNSV6:      c.probeRootDNS(ctx, "udp6"),
 		RecursiveDNSV4: c.probeRecursiveDNS(ctx, "udp4", dns.TypeA, recursiveResolversV4),
 		RecursiveDNSV6: c.probeRecursiveDNS(ctx, "udp6", dns.TypeAAAA, recursiveResolversV6),
-		DNSSEC:         c.probeDNSSEC(ctx),
 		PublicIPv4:     c.observePublicIP(ctx, "udp4", publicIPv4Providers),
 		PublicIPv6:     c.observePublicIP(ctx, "udp6", publicIPv6Providers),
 	}
@@ -201,70 +196,6 @@ func (c UpstreamCollector) observePublicIP(ctx context.Context, network string, 
 	}
 }
 
-func (c UpstreamCollector) probeDNSSEC(ctx context.Context) model.DNSSECProbeResult {
-	positive := c.queryDNSSECPositive(ctx)
-	negative := c.queryDNSSECNegative(ctx)
-	emitDNSSECTrace(ctx, "dnssec_positive", positive)
-	emitDNSSECTrace(ctx, "dnssec_negative", negative)
-
-	return model.DNSSECProbeResult{
-		Positive: positive,
-		Negative: negative,
-	}
-}
-
-func (c UpstreamCollector) queryDNSSECPositive(ctx context.Context) model.DNSSECProbeAttempt {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dnssecPositive, dns.TypeA)
-	msg.RecursionDesired = true
-	msg.SetEdns0(1232, true)
-
-	answer, latency, err := c.exchange(ctx, "udp4", localUnbound, localUnboundPort, msg)
-	if err != nil {
-		return model.DNSSECProbeAttempt{
-			Name:    dnssecPositive,
-			Target:  net.JoinHostPort(localUnbound, localUnboundPort),
-			Status:  classifyDNSSECError(err),
-			Latency: latency,
-			Detail:  err.Error(),
-		}
-	}
-
-	attempt := model.DNSSECProbeAttempt{
-		Name:    dnssecPositive,
-		Target:  net.JoinHostPort(localUnbound, localUnboundPort),
-		Latency: latency,
-	}
-	attempt.Status, attempt.Rcode, attempt.AD, attempt.Detail = validateDNSSECPositiveAnswer(answer)
-	return attempt
-}
-
-func (c UpstreamCollector) queryDNSSECNegative(ctx context.Context) model.DNSSECProbeAttempt {
-	msg := new(dns.Msg)
-	msg.SetQuestion(dnssecNegative, dns.TypeA)
-	msg.RecursionDesired = true
-	msg.SetEdns0(1232, true)
-
-	answer, latency, err := c.exchange(ctx, "udp4", localUnbound, localUnboundPort, msg)
-	if err != nil {
-		return model.DNSSECProbeAttempt{
-			Name:    dnssecNegative,
-			Target:  net.JoinHostPort(localUnbound, localUnboundPort),
-			Status:  classifyDNSSECError(err),
-			Latency: latency,
-			Detail:  err.Error(),
-		}
-	}
-
-	attempt := model.DNSSECProbeAttempt{
-		Name:    dnssecNegative,
-		Target:  net.JoinHostPort(localUnbound, localUnboundPort),
-		Latency: latency,
-	}
-	attempt.Status, attempt.Rcode, attempt.AD, attempt.Detail = validateDNSSECNegativeAnswer(answer)
-	return attempt
-}
-
 func (c UpstreamCollector) queryPublicIP(ctx context.Context, network string, provider publicIPProvider) model.PublicIPObservation {
 	msg := new(dns.Msg)
 	msg.SetQuestion(provider.Name, provider.Type)
@@ -291,16 +222,7 @@ func (c UpstreamCollector) queryPublicIP(ctx context.Context, network string, pr
 }
 
 func (c UpstreamCollector) exchange(ctx context.Context, network, host, port string, msg *dns.Msg) (*dns.Msg, time.Duration, error) {
-	probeCtx, cancel := context.WithTimeout(ctx, c.ProbeTimeout)
-	defer cancel()
-
-	client := &dns.Client{
-		Net:     network,
-		Timeout: c.ProbeTimeout,
-	}
-
-	answer, latency, err := client.ExchangeContext(probeCtx, msg, net.JoinHostPort(host, port))
-	return answer, latency, err
+	return dnsExchange(ctx, c.ProbeTimeout, network, host, port, msg)
 }
 
 func validateRootNSAnswer(answer *dns.Msg) (model.DNSProbeStatus, string) {
@@ -398,48 +320,6 @@ func extractObservedIP(answer *dns.Msg, qtype uint16, family int) (string, strin
 	return "", "no public IP answer"
 }
 
-func validateDNSSECPositiveAnswer(answer *dns.Msg) (model.DNSSECProbeStatus, string, bool, string) {
-	if answer == nil {
-		return model.DNSSECProbeStatusUnexpectedFailure, "", false, "nil response"
-	}
-	rcode := dns.RcodeToString[answer.Rcode]
-	if !answer.Response {
-		return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, "response missing QR bit"
-	}
-	if answer.Rcode != dns.RcodeSuccess {
-		return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, fmt.Sprintf("expected NOERROR, got %s", rcode)
-	}
-	if len(answer.Answer) == 0 {
-		return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, "no A answers"
-	}
-	if !answer.AuthenticatedData {
-		return model.DNSSECProbeStatusUnexpectedFailure, rcode, false, "missing AD bit"
-	}
-	for _, rr := range answer.Answer {
-		if _, ok := rr.(*dns.A); ok {
-			return model.DNSSECProbeStatusOK, rcode, true, ""
-		}
-	}
-	return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, "no A answers"
-}
-
-func validateDNSSECNegativeAnswer(answer *dns.Msg) (model.DNSSECProbeStatus, string, bool, string) {
-	if answer == nil {
-		return model.DNSSECProbeStatusUnexpectedFailure, "", false, "nil response"
-	}
-	rcode := dns.RcodeToString[answer.Rcode]
-	if !answer.Response {
-		return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, "response missing QR bit"
-	}
-	if answer.Rcode == dns.RcodeServerFailure {
-		return model.DNSSECProbeStatusOK, rcode, answer.AuthenticatedData, ""
-	}
-	if answer.Rcode == dns.RcodeSuccess {
-		return model.DNSSECProbeStatusUnexpectedSuccess, rcode, answer.AuthenticatedData, "expected SERVFAIL, got NOERROR"
-	}
-	return model.DNSSECProbeStatusUnexpectedFailure, rcode, answer.AuthenticatedData, fmt.Sprintf("expected SERVFAIL, got %s", rcode)
-}
-
 func matchesFamily(ip net.IP, family int) bool {
 	switch family {
 	case 4:
@@ -492,20 +372,6 @@ func classifyExchangeError(err error) model.DNSProbeStatus {
 	return model.DNSProbeStatusNetworkError
 }
 
-func classifyDNSSECError(err error) model.DNSSECProbeStatus {
-	if err == nil {
-		return model.DNSSECProbeStatusOK
-	}
-	if errors.Is(err, context.DeadlineExceeded) {
-		return model.DNSSECProbeStatusTimeout
-	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
-		return model.DNSSECProbeStatusTimeout
-	}
-	return model.DNSSECProbeStatusNetworkError
-}
-
 func formatProbeFailure(result model.DNSProbeResult) string {
 	label := result.Name
 	if label == "" {
@@ -556,21 +422,6 @@ func emitObservationTrace(ctx context.Context, network, provider string, observa
 		Latency:  observation.Latency,
 		Detail:   observation.Detail,
 		IP:       observation.IP,
-	})
-}
-
-func emitDNSSECTrace(ctx context.Context, kind string, attempt model.DNSSECProbeAttempt) {
-	events.Emit(ctx, events.ProbeResult{
-		At:       time.Now().Local(),
-		Kind:     kind,
-		Family:   "local",
-		Target:   attempt.Target,
-		Status:   attempt.Status.String(),
-		Latency:  attempt.Latency,
-		Detail:   attempt.Detail,
-		Provider: "unbound",
-		Rcode:    attempt.Rcode,
-		AD:       attempt.AD,
 	})
 }
 
