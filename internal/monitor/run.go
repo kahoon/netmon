@@ -149,7 +149,7 @@ func (m *Monitor) Run(ctx context.Context) error {
 }
 
 func (m *Monitor) startStatsConsumer(ctx context.Context) {
-	sub := m.bus.Subscribe(events.WithoutReplay())
+	sub := m.bus.Subscribe("all", events.WithoutReplay())
 	go func() {
 		defer sub.Close()
 		for {

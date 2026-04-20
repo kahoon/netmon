@@ -52,8 +52,22 @@ func NewMonitor(cfg config.Config) *Monitor {
 		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
 		bus: events.NewHub(
-			events.WithBuffer(64),
-			events.WithHistory(64),
+			events.FeedConfig{
+				Name:   "all",
+				Buffer: 64,
+			},
+			events.FeedConfig{
+				Name:    "status",
+				Filter:  statusEventsOnly,
+				Buffer:  1,
+				History: 1,
+			},
+			events.FeedConfig{
+				Name:    "tasks",
+				Filter:  taskEventsOnly,
+				Buffer:  64,
+				History: 64,
+			},
 		),
 		stats: recorder,
 	}
@@ -274,7 +288,7 @@ func (m *Monitor) subscribeStatus() StatusSubscription {
 	m.mu.Unlock()
 
 	sub := m.bus.Subscribe(
-		events.WithFilter(statusEventsOnly),
+		"status",
 		events.WithInitial(events.StatusChanged{
 			At:     time.Now().Local(),
 			Status: cloneStatusView(initial),
@@ -284,7 +298,7 @@ func (m *Monitor) subscribeStatus() StatusSubscription {
 }
 
 func (m *Monitor) subscribeTasks() TaskSubscription {
-	sub := m.bus.Subscribe(events.WithFilter(taskEventsOnly))
+	sub := m.bus.Subscribe("tasks")
 	return newTaskSubscription(sub)
 }
 

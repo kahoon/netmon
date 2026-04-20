@@ -1,6 +1,7 @@
 package events
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/kahoon/ring"
@@ -8,15 +9,14 @@ import (
 
 type Filter func(Event) bool
 
-type Option func(*hubOptions)
-
-type hubOptions struct {
-	buffer          int
-	historyCapacity uint64
+type FeedConfig struct {
+	Name    string
+	Filter  Filter
+	Buffer  int
+	History uint64
 }
 
 type subscriptionOptions struct {
-	filter  Filter
 	initial []Event
 	replay  bool
 }
@@ -24,16 +24,20 @@ type subscriptionOptions struct {
 type SubscriptionOption func(*subscriptionOptions)
 
 type Hub struct {
-	mu      sync.Mutex
-	nextID  uint64
-	subs    map[uint64]*subscriber
+	mu     sync.Mutex
+	nextID uint64
+	feeds  map[string]*feed
+}
+
+type feed struct {
+	filter  Filter
 	buffer  int
 	history *ring.Queue[Event]
+	subs    map[uint64]*subscriber
 }
 
 type subscriber struct {
-	filter Filter
-	ch     chan Event
+	ch chan Event
 }
 
 type Subscription struct {
@@ -41,38 +45,29 @@ type Subscription struct {
 	close   func()
 }
 
-func NewHub(opts ...Option) *Hub {
-	cfg := hubOptions{buffer: 1}
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-
+func NewHub(feedConfigs ...FeedConfig) *Hub {
 	hub := &Hub{
-		subs:   make(map[uint64]*subscriber),
-		buffer: cfg.buffer,
+		feeds: make(map[string]*feed, len(feedConfigs)),
 	}
-	if cfg.historyCapacity > 0 {
-		hub.history = ring.New[Event](ring.WithMinCapacity[Event](cfg.historyCapacity))
+	for _, cfg := range feedConfigs {
+		if cfg.Name == "" {
+			panic("events: feed name is required")
+		}
+		if _, exists := hub.feeds[cfg.Name]; exists {
+			panic(fmt.Sprintf("events: duplicate feed %q", cfg.Name))
+		}
+
+		f := &feed{
+			filter: cfg.Filter,
+			buffer: max(cfg.Buffer, 1),
+			subs:   make(map[uint64]*subscriber),
+		}
+		if cfg.History > 0 {
+			f.history = ring.New[Event](ring.WithMinCapacity[Event](cfg.History))
+		}
+		hub.feeds[cfg.Name] = f
 	}
 	return hub
-}
-
-func WithBuffer(buffer int) Option {
-	return func(cfg *hubOptions) {
-		cfg.buffer = buffer
-	}
-}
-
-func WithHistory(capacity uint64) Option {
-	return func(cfg *hubOptions) {
-		cfg.historyCapacity = capacity
-	}
-}
-
-func WithFilter(filter Filter) SubscriptionOption {
-	return func(cfg *subscriptionOptions) {
-		cfg.filter = filter
-	}
 }
 
 func WithInitial(initial ...Event) SubscriptionOption {
@@ -91,18 +86,20 @@ func (h *Hub) Emit(event Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	if h.history != nil {
-		h.history.Push(event)
-	}
-	for _, sub := range h.subs {
-		if !matches(sub.filter, event) {
+	for _, feed := range h.feeds {
+		if !matches(feed.filter, event) {
 			continue
 		}
-		live(sub.ch, event)
+		if feed.history != nil {
+			feed.history.Push(event)
+		}
+		for _, sub := range feed.subs {
+			live(sub.ch, event)
+		}
 	}
 }
 
-func (h *Hub) Subscribe(opts ...SubscriptionOption) *Subscription {
+func (h *Hub) Subscribe(feedName string, opts ...SubscriptionOption) *Subscription {
 	cfg := subscriptionOptions{replay: true}
 	for _, opt := range opts {
 		opt(&cfg)
@@ -111,28 +108,27 @@ func (h *Hub) Subscribe(opts ...SubscriptionOption) *Subscription {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
+	feed, ok := h.feeds[feedName]
+	if !ok {
+		panic(fmt.Sprintf("events: unknown feed %q", feedName))
+	}
+
 	var seed []Event
 	if cfg.replay {
-		seed = h.seedLocked(cfg.filter)
+		seed = feed.seedLocked()
 	}
-	capacity := max(h.buffer, len(seed)+len(cfg.initial))
+	capacity := max(feed.buffer, len(seed)+len(cfg.initial))
 	ch := make(chan Event, capacity)
 	for _, event := range seed {
 		ch <- event
 	}
 	for _, event := range cfg.initial {
-		if !matches(cfg.filter, event) {
-			continue
-		}
 		ch <- event
 	}
 
 	id := h.nextID
 	h.nextID++
-	h.subs[id] = &subscriber{
-		filter: cfg.filter,
-		ch:     ch,
-	}
+	feed.subs[id] = &subscriber{ch: ch}
 
 	var once sync.Once
 	return &Subscription{
@@ -140,9 +136,9 @@ func (h *Hub) Subscribe(opts ...SubscriptionOption) *Subscription {
 		close: func() {
 			once.Do(func() {
 				h.mu.Lock()
-				sub, ok := h.subs[id]
+				sub, ok := feed.subs[id]
 				if ok {
-					delete(h.subs, id)
+					delete(feed.subs, id)
 					close(sub.ch)
 				}
 				h.mu.Unlock()
@@ -161,16 +157,13 @@ func (s *Subscription) Close() {
 	}
 }
 
-func (h *Hub) seedLocked(filter Filter) []Event {
-	if h.history == nil || h.history.Len() == 0 {
+func (f *feed) seedLocked() []Event {
+	if f.history == nil || f.history.Len() == 0 {
 		return nil
 	}
 
-	seed := make([]Event, 0, h.history.Len())
-	for event := range h.history.All() {
-		if !matches(filter, *event) {
-			continue
-		}
+	seed := make([]Event, 0, f.history.Len())
+	for event := range f.history.All() {
 		seed = append(seed, *event)
 	}
 	return seed

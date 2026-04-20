@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kahoon/netmon/internal/config"
+	"github.com/kahoon/netmon/internal/events"
 	"github.com/kahoon/netmon/internal/model"
 )
 
@@ -272,6 +273,14 @@ func TestWatchTasksSeedsRecentHistory(t *testing.T) {
 	telemetry := newPendingTelemetry(daemon)
 	for range 20 {
 		telemetry.OnScheduled("refresh:listeners", 3*time.Second)
+	}
+	for range 100 {
+		daemon.bus.Emit(events.StatusChanged{
+			At: time.Now().Local(),
+			Status: events.StatusView{
+				Summary: "healthy",
+			},
+		})
 	}
 
 	sub, err := daemon.WatchTasks(context.Background())
