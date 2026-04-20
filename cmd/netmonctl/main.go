@@ -128,7 +128,7 @@ func runTrace(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContextWithTimeout(spec, args, forever, func(fs *flag.FlagSet) {
 		fs.BoolVar(&noTraceID, "no-trace-id", false, "Don't include a trace ID in emitted events (for testing)")
-		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream, unbound")
+		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream, unbound, pihole")
 	})
 	defer cmd.cancel()
 
@@ -261,6 +261,7 @@ func runInfo(spec commandSpec, args []string) {
 	fmt.Printf("Listener Poll:      %s\n", resp.Msg.GetListenerPoll())
 	fmt.Printf("Upstream Poll:      %s\n", resp.Msg.GetUpstreamPoll())
 	fmt.Printf("Unbound Poll:       %s\n", resp.Msg.GetUnboundPoll())
+	fmt.Printf("Pi-hole Poll:       %s\n", resp.Msg.GetPiholePoll())
 	fmt.Printf("Runtime Stats:      %s\n", resp.Msg.GetRuntimeStatsInterval())
 	fmt.Printf("Notify Host:        %s\n", resp.Msg.GetNtfyHost())
 	fmt.Printf("RPC Socket:         %s\n", cmd.socketPath)
@@ -269,7 +270,7 @@ func runInfo(spec commandSpec, args []string) {
 func runRefresh(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContext(spec, args, func(fs *flag.FlagSet) {
-		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream, unbound")
+		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream, unbound, pihole")
 	})
 	defer cmd.cancel()
 
@@ -395,6 +396,8 @@ func parseRefreshScope(value string) (netmonv1.RefreshScope, error) {
 		return netmonv1.RefreshScope_REFRESH_SCOPE_UPSTREAM, nil
 	case "unbound":
 		return netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND, nil
+	case "pihole":
+		return netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope %q", value)
 	}
@@ -417,6 +420,8 @@ func canonicalRefreshScope(scope netmonv1.RefreshScope) string {
 		return "upstream"
 	case netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND:
 		return "unbound"
+	case netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE:
+		return "pihole"
 	default:
 		return "all"
 	}
@@ -479,6 +484,17 @@ func printState(resp *netmonv1.GetStateResponse) {
 	fmt.Println("Unbound")
 	printDNSSECProbe("DNSSEC Positive", resp.GetUnbound().GetDnssec().GetPositive())
 	printDNSSECProbe("DNSSEC Negative", resp.GetUnbound().GetDnssec().GetNegative())
+
+	fmt.Println()
+	fmt.Println("Pi-hole")
+	printDNSProbe("DNS IPv4", resp.GetPihole().GetDnsV4())
+	printDNSProbe("DNS IPv6", resp.GetPihole().GetDnsV6())
+	printPiHoleStatus(resp.GetPihole().GetStatus())
+	printPiHoleUpstreams(resp.GetPihole().GetUpstreams())
+	printPiHoleGravity(resp.GetPihole().GetGravity())
+	printPiHoleCounters(resp.GetPihole().GetCounters())
+	printDNSLatencyWindow("Latency IPv4", resp.GetPihole().GetLatencyIpv4())
+	printDNSLatencyWindow("Latency IPv6", resp.GetPihole().GetLatencyIpv6())
 }
 
 func printStats(resp *netmonv1.GetStatsResponse) {
@@ -704,6 +720,87 @@ func printDNSSECProbe(label string, probe *netmonv1.DnssecProbeAttempt) {
 	if detail := probe.GetDetail(); detail != "" {
 		fmt.Printf("  %-19s %s\n", "", detail)
 	}
+}
+
+func printPiHoleStatus(status *netmonv1.PiHoleStatus) {
+	fmt.Printf("  %-19s %s\n", "Blocking:", defaultString(status.GetBlocking(), "(unknown)"))
+	if detail := status.GetDetail(); detail != "" {
+		fmt.Printf("  %-19s %s\n", "", detail)
+	}
+	if version := joinNamedValues(
+		"core", status.GetCoreVersion(),
+		"web", status.GetWebVersion(),
+		"ftl", status.GetFtlVersion(),
+	); version != "" {
+		fmt.Printf("  %-19s %s\n", "Versions:", version)
+	}
+}
+
+func printPiHoleUpstreams(upstreams *netmonv1.PiHoleUpstreams) {
+	fmt.Printf("  %-19s %s\n", "Upstreams:", joinOrNone(upstreams.GetServers()))
+	fmt.Printf("  %-19s matches_expected=%t\n", "", upstreams.GetMatchesExpected())
+	if detail := upstreams.GetDetail(); detail != "" {
+		fmt.Printf("  %-19s %s\n", "", detail)
+	}
+}
+
+func printPiHoleGravity(gravity *netmonv1.PiHoleGravity) {
+	lastUpdated := "(unknown)"
+	if ts := gravity.GetLastUpdated(); ts != nil {
+		lastUpdated = ts.AsTime().Local().Format(time.RFC3339)
+	}
+	fmt.Printf("  %-19s %s\n", "Gravity Updated:", lastUpdated)
+	fmt.Printf("  %-19s domains_blocked=%d stale=%t\n", "", gravity.GetDomainsBlocked(), gravity.GetStale())
+	if detail := gravity.GetDetail(); detail != "" {
+		fmt.Printf("  %-19s %s\n", "", detail)
+	}
+}
+
+func printPiHoleCounters(counters *netmonv1.PiHoleCounters) {
+	fmt.Printf("  %-19s total=%d blocked=%d cache_hits=%d forwarded=%d clients_active=%d\n",
+		"Counters:",
+		counters.GetQueriesTotal(),
+		counters.GetQueriesBlocked(),
+		counters.GetCacheHits(),
+		counters.GetForwarded(),
+		counters.GetClientsActive(),
+	)
+	if detail := counters.GetDetail(); detail != "" {
+		fmt.Printf("  %-19s %s\n", "", detail)
+	}
+}
+
+func printDNSLatencyWindow(label string, window *netmonv1.DnsLatencyWindow) {
+	fmt.Printf("  %-19s trend=%s samples=%d\n", label+":", defaultString(window.GetTrend(), "unknown"), window.GetSamples())
+	var parts []string
+	if last := window.GetLast(); last != nil {
+		parts = append(parts, "last="+last.AsDuration().String())
+	}
+	if average := window.GetAverage(); average != nil {
+		parts = append(parts, "avg="+average.AsDuration().String())
+	}
+	if max := window.GetMax(); max != nil {
+		parts = append(parts, "max="+max.AsDuration().String())
+	}
+	if len(parts) > 0 {
+		fmt.Printf("  %-19s %s\n", "", strings.Join(parts, " "))
+	}
+}
+
+func joinNamedValues(values ...string) string {
+	if len(values)%2 != 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		name := strings.TrimSpace(values[i])
+		value := strings.TrimSpace(values[i+1])
+		if value == "" {
+			continue
+		}
+		parts = append(parts, name+"="+value)
+	}
+	return strings.Join(parts, " ")
 }
 
 func formatProbeStatus(status string) string {

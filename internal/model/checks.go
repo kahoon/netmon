@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 const (
@@ -19,6 +20,11 @@ const (
 	checkExternalDNSV4   = "external-dns-v4"
 	checkExternalDNSV6   = "external-dns-v6"
 	checkDNSSEC          = "dnssec-validation"
+	checkPiHoleDNSV4     = "pihole-dns-v4"
+	checkPiHoleDNSV6     = "pihole-dns-v6"
+	checkPiHoleBlocking  = "pihole-blocking"
+	checkPiHoleUpstreams = "pihole-upstreams"
+	checkPiHoleGravity   = "pihole-gravity"
 )
 
 var checkOrder = []string{
@@ -34,6 +40,11 @@ var checkOrder = []string{
 	checkExternalDNSV4,
 	checkExternalDNSV6,
 	checkDNSSEC,
+	checkPiHoleDNSV4,
+	checkPiHoleDNSV6,
+	checkPiHoleBlocking,
+	checkPiHoleUpstreams,
+	checkPiHoleGravity,
 }
 
 func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
@@ -50,6 +61,11 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.RootDNSV4, state.Upstream.RecursiveDNSV4))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.RootDNSV6, state.Upstream.RecursiveDNSV6))
 	addCheck(checks, dnssecValidationCheck(state.Unbound.DNSSEC))
+	addCheck(checks, piholeDNSCheck(checkPiHoleDNSV4, "IPv4", state.PiHole.DNSV4))
+	addCheck(checks, piholeDNSCheck(checkPiHoleDNSV6, "IPv6", state.PiHole.DNSV6))
+	addCheck(checks, piholeBlockingCheck(state.PiHole.Status))
+	addCheck(checks, piholeUpstreamsCheck(state.PiHole.Upstreams))
+	addCheck(checks, piholeGravityCheck(state.PiHole.Gravity))
 	return checks
 }
 
@@ -238,6 +254,88 @@ func dnssecValidationCheck(result DNSSECProbeResult) CheckResult {
 		check.Summary = "DNSSEC validation failing"
 	}
 	check.Detail = fmt.Sprintf("positive: %s; negative: %s", result.Positive.Summary(), result.Negative.Summary())
+	return check
+}
+
+func piholeDNSCheck(key, family string, probe DNSProbeResult) CheckResult {
+	check := CheckResult{
+		Key:      key,
+		Label:    "Pi-hole DNS " + family,
+		Severity: SeverityOK,
+	}
+	if probe.OK() {
+		return check
+	}
+	check.Severity = SeverityCrit
+	check.Summary = fmt.Sprintf("Pi-hole DNS over %s failing", family)
+	check.Detail = probe.Summary()
+	return check
+}
+
+func piholeBlockingCheck(status PiHoleStatus) CheckResult {
+	check := CheckResult{
+		Key:      checkPiHoleBlocking,
+		Label:    "Pi-hole blocking",
+		Severity: SeverityOK,
+	}
+	switch {
+	case status.Detail != "":
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole blocking status unavailable"
+		check.Detail = status.Detail
+	case status.Enabled():
+		return check
+	case status.Blocking == "":
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole blocking status unavailable"
+	default:
+		check.Severity = SeverityCrit
+		check.Summary = fmt.Sprintf("Pi-hole blocking %s", status.Blocking)
+	}
+	return check
+}
+
+func piholeUpstreamsCheck(upstreams PiHoleUpstreams) CheckResult {
+	check := CheckResult{
+		Key:      checkPiHoleUpstreams,
+		Label:    "Pi-hole upstreams",
+		Severity: SeverityOK,
+	}
+	switch {
+	case upstreams.Detail != "":
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole upstream configuration unavailable"
+		check.Detail = upstreams.Detail
+	case upstreams.MatchesExpected:
+		return check
+	default:
+		check.Severity = SeverityCrit
+		check.Summary = "Pi-hole upstreams mismatch"
+		check.Detail = fmt.Sprintf("got %s", strings.Join(upstreams.Servers, ", "))
+		return check
+	}
+	return check
+}
+
+func piholeGravityCheck(gravity PiHoleGravity) CheckResult {
+	check := CheckResult{
+		Key:      checkPiHoleGravity,
+		Label:    "Pi-hole gravity freshness",
+		Severity: SeverityOK,
+	}
+	switch {
+	case gravity.Detail != "":
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole gravity status unavailable"
+		check.Detail = gravity.Detail
+	case gravity.LastUpdated.IsZero():
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole gravity status unavailable"
+	case gravity.Stale:
+		check.Severity = SeverityWarn
+		check.Summary = "Pi-hole gravity stale"
+		check.Detail = "last updated " + gravity.LastUpdated.Local().Format(time.RFC3339)
+	}
 	return check
 }
 

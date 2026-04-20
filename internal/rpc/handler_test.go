@@ -124,6 +124,7 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 				ListenerPoll:         10 * time.Minute,
 				UpstreamPoll:         5 * time.Minute,
 				UnboundPoll:          5 * time.Minute,
+				PiHolePoll:           5 * time.Minute,
 				RuntimeStatsInterval: 24 * time.Hour,
 				NtfyHost:             "ntfy.sh",
 			},
@@ -147,9 +148,12 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 	if got, want := resp.Msg.GetUnboundPoll(), "5m0s"; got != want {
 		t.Fatalf("GetInfo().UnboundPoll = %q, want %q", got, want)
 	}
+	if got, want := resp.Msg.GetPiholePoll(), "5m0s"; got != want {
+		t.Fatalf("GetInfo().PiholePoll = %q, want %q", got, want)
+	}
 }
 
-func TestGetStateMapsUnboundState(t *testing.T) {
+func TestGetStateMapsPiHoleAndUnboundState(t *testing.T) {
 	handler := &Handler{
 		svc: &fakeService{
 			state: model.SystemState{
@@ -170,6 +174,31 @@ func TestGetStateMapsUnboundState(t *testing.T) {
 						},
 					},
 				},
+				PiHole: model.PiHoleState{
+					DNSV4: model.DNSProbeResult{
+						Name:   "e.root-servers.net. via Pi-hole",
+						Target: "127.0.0.1:53",
+						Status: model.DNSProbeStatusOK,
+					},
+					Status: model.PiHoleStatus{
+						Blocking:    "enabled",
+						CoreVersion: "6.0",
+					},
+					Upstreams: model.PiHoleUpstreams{
+						Servers:         []string{"127.0.0.1#5335", "::1#5335"},
+						MatchesExpected: true,
+					},
+					Gravity: model.PiHoleGravity{
+						Stale: false,
+					},
+					Counters: model.PiHoleCounters{
+						QueriesTotal: 42,
+					},
+					LatencyIPv4: model.DNSLatencyWindow{
+						Samples: 3,
+						Trend:   model.LatencyTrendStable,
+					},
+				},
 			},
 		},
 	}
@@ -187,6 +216,18 @@ func TestGetStateMapsUnboundState(t *testing.T) {
 	}
 	if got, want := resp.Msg.GetUnbound().GetDnssec().GetNegative().GetRcode(), "SERVFAIL"; got != want {
 		t.Fatalf("GetState().Unbound.Dnssec.Negative.Rcode = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetPihole().GetStatus().GetBlocking(), "enabled"; got != want {
+		t.Fatalf("GetState().Pihole.Status.Blocking = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetPihole().GetUpstreams().GetServers()[0], "127.0.0.1#5335"; got != want {
+		t.Fatalf("GetState().Pihole.Upstreams.Servers[0] = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetPihole().GetCounters().GetQueriesTotal(), uint64(42); got != want {
+		t.Fatalf("GetState().Pihole.Counters.QueriesTotal = %d, want %d", got, want)
+	}
+	if got, want := resp.Msg.GetPihole().GetLatencyIpv4().GetTrend(), "stable"; got != want {
+		t.Fatalf("GetState().Pihole.LatencyIpv4.Trend = %q, want %q", got, want)
 	}
 }
 

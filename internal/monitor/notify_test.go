@@ -117,6 +117,18 @@ func defaultCheckLabel(key string) string {
 		return "external DNS IPv4"
 	case "external-dns-v6":
 		return "external DNS IPv6"
+	case "dnssec-validation":
+		return "DNSSEC validation"
+	case "pihole-dns-v4":
+		return "Pi-hole DNS IPv4"
+	case "pihole-dns-v6":
+		return "Pi-hole DNS IPv6"
+	case "pihole-blocking":
+		return "Pi-hole blocking"
+	case "pihole-upstreams":
+		return "Pi-hole upstreams"
+	case "pihole-gravity":
+		return "Pi-hole gravity freshness"
 	default:
 		return key
 	}

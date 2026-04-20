@@ -3,10 +3,10 @@
 `netmon` is a small Linux network monitor for a DNS appliance host.
 
 It watches one interface with netlink, runs separate collectors for interface
-state, listener state, upstream reachability, and local Unbound validation,
-evaluates a fixed set of health checks, sends an `ntfy` notification only when
-the check results change, and exposes a local Connect RPC API over a Unix
-domain socket.
+state, listener state, upstream reachability, local Unbound validation, and
+local Pi-hole service/configuration state, evaluates a fixed set of health
+checks, sends an `ntfy` notification only when the check results change, and
+exposes a local Connect RPC API over a Unix domain socket.
 
 The current health model is intentionally narrow:
 
@@ -17,6 +17,10 @@ The current health model is intentionally narrow:
 - port `5335` must be listening on loopback only
 - external DNS health must remain functional over IPv4 and IPv6
 - local Unbound DNSSEC validation must behave correctly
+- Pi-hole must answer DNS correctly over IPv4 and IPv6
+- Pi-hole must remain enabled
+- Pi-hole must forward only to local Unbound
+- Pi-hole gravity must not become stale
 - public IPv4 and public IPv6 changes are observed and reported as informational changes
 
 This makes it much quieter than a raw address-change notifier. Temporary IPv6
@@ -55,6 +59,14 @@ For local DNSSEC validation:
 - a recursive `A` query for `internetsociety.org.` against local Unbound on `127.0.0.1:5335` must succeed with `AD=true`
 - a recursive `A` query for `dnssec-failed.org.` against local Unbound on `127.0.0.1:5335` must fail with `SERVFAIL`
 
+For local Pi-hole service and policy state:
+
+- an IPv4 recursive query through Pi-hole on `127.0.0.1:53` must return the expected root-server address
+- an IPv6 recursive query through Pi-hole on `::1:53` must return the expected root-server address
+- Pi-hole blocking must remain enabled
+- Pi-hole upstreams must remain pinned to local Unbound on `127.0.0.1#5335` and `::1#5335`
+- Pi-hole gravity must not age past the configured freshness threshold
+
 ## Alert Severity
 
 - `CRIT`
@@ -64,11 +76,16 @@ For local DNSSEC validation:
   - `53/udp` missing IPv4 or IPv6 coverage
   - `5335/tcp` not listening on loopback
   - `5335/udp` not listening on loopback
+  - Pi-hole DNS fails over IPv4
+  - Pi-hole DNS fails over IPv6
+  - Pi-hole blocking is disabled
+  - Pi-hole upstreams do not match local Unbound
 - `WARN`
   - no usable IPv6 GUA
   - external DNS is degraded on IPv4
   - external DNS is degraded on IPv6
   - DNSSEC validation is degraded
+  - Pi-hole gravity is stale
   - `5335` is exposed on any non-loopback address
 - `INFO`
   - recovery from a previous warning or critical condition
@@ -116,6 +133,8 @@ Optional:
 - `UNBOUND_POLL_INTERVAL`
   - interval for polling local Unbound validation state
   - default: `5m`
+- `PIHOLE_PASSWORD`
+  - bootstrap password used to obtain the short-lived Pi-hole API session token
 
 Upstream probing is pinned in code:
 
@@ -124,6 +143,9 @@ Upstream probing is pinned in code:
 - public IPv4 observation prefers OpenDNS and falls back to Google
 - public IPv6 observation prefers Google and falls back to OpenDNS
 - local DNSSEC validation probes target Unbound directly on `127.0.0.1:5335`
+- local Pi-hole DNS probes target Pi-hole directly on `127.0.0.1:53` and `::1:53`
+- Pi-hole policy/configuration state is read through the local Pi-hole v6 API
+- Pi-hole gravity freshness currently uses a fixed `7d` threshold
 
 If `EXPECTED_ULA` is unset, the ULA check is skipped.
 
@@ -192,6 +214,7 @@ netmonctl state
 netmonctl state --json
 netmonctl info
 netmonctl refresh --scope upstream
+netmonctl refresh --scope pihole
 netmonctl set debug-logging on
 netmonctl set runtime-stats-interval 30m
 netmonctl help refresh
@@ -208,6 +231,7 @@ then exits when that work completes. It is meant for answering questions like:
 
 - which collectors ran
 - which upstream probes succeeded or failed
+- which local Pi-hole probes succeeded or failed
 - how checks changed
 - whether a notification was sent or skipped
 - how long the refresh took
@@ -217,6 +241,7 @@ Examples:
 ```bash
 netmonctl trace
 netmonctl trace -scope upstream
+netmonctl trace -scope pihole
 ```
 
 Example output:
@@ -293,6 +318,7 @@ The task stream includes events such as:
 
 - `scheduled`
 - `rescheduled`
+- `executing`
 - `executed`
 - `cancelled`
 - `failed`
@@ -401,7 +427,7 @@ Edit `/etc/default/netmon` for your environment before starting the service.
 1. Look up the monitored interface.
 2. Subscribe to link, address, and route updates with netlink.
 3. Debounce interface bursts for `8s`.
-4. Refresh interface, listeners, and upstream reachability on separate schedules.
+4. Refresh interface, listeners, upstream reachability, local Unbound validation, and local Pi-hole state on separate schedules.
 5. Evaluate a fixed set of checks against the latest collected state.
 6. Notify only if a check changed or the observed public IPv4 or IPv6 changed.
 
@@ -411,6 +437,7 @@ By default the schedulers run on these cadences:
 - listener poll: `10m`
 - upstream poll: `5m`
 - unbound poll: `5m`
+- pihole poll: `5m`
 - runtime stats: `168h`
 
 ## Notes
@@ -427,5 +454,11 @@ By default the schedulers run on these cadences:
   with deterministic fallback.
 - DNSSEC validation is tested directly against local Unbound on `127.0.0.1:5335`
   using one positive and one negative validation query.
+- Pi-hole service health is tested directly against the local client-facing DNS
+  listeners on `127.0.0.1:53` and `::1:53`, while Pi-hole control-plane state
+  is read from the v6 API using a short-lived session token.
+- Pi-hole latency windows are retained in a bounded
+  [`ring`](https://github.com/kahoon/ring) buffer so the trend logic stays
+  fixed-size without steady-state slice churn.
 - Notification delivery resolves the notification host through a dedicated
   fallback resolver instead of the local system resolver.

@@ -118,11 +118,23 @@ type UnboundState struct {
 	DNSSEC DNSSECProbeResult
 }
 
+type PiHoleState struct {
+	DNSV4       DNSProbeResult
+	DNSV6       DNSProbeResult
+	Status      PiHoleStatus
+	Upstreams   PiHoleUpstreams
+	Gravity     PiHoleGravity
+	Counters    PiHoleCounters
+	LatencyIPv4 DNSLatencyWindow
+	LatencyIPv6 DNSLatencyWindow
+}
+
 type SystemState struct {
 	Interface InterfaceState
 	Listeners ListenerState
 	Upstream  UpstreamState
 	Unbound   UnboundState
+	PiHole    PiHoleState
 }
 
 type SocketProbe struct {
@@ -266,6 +278,64 @@ func (a DNSSECProbeAttempt) Summary() string {
 type DNSSECProbeResult struct {
 	Positive DNSSECProbeAttempt
 	Negative DNSSECProbeAttempt
+}
+
+type PiHoleStatus struct {
+	Blocking    string
+	Detail      string
+	CoreVersion string
+	WebVersion  string
+	FTLVersion  string
+}
+
+func (s PiHoleStatus) Enabled() bool {
+	return s.Blocking == "enabled"
+}
+
+type PiHoleUpstreams struct {
+	Servers         []string
+	MatchesExpected bool
+	Detail          string
+}
+
+type PiHoleGravity struct {
+	LastUpdated    time.Time
+	DomainsBlocked uint64
+	Stale          bool
+	Detail         string
+}
+
+type PiHoleCounters struct {
+	QueriesTotal   uint64
+	QueriesBlocked uint64
+	CacheHits      uint64
+	Forwarded      uint64
+	ClientsActive  uint64
+	Detail         string
+}
+
+type LatencyTrend string
+
+const (
+	LatencyTrendUnknown LatencyTrend = "unknown"
+	LatencyTrendStable  LatencyTrend = "stable"
+	LatencyTrendRising  LatencyTrend = "rising"
+	LatencyTrendFalling LatencyTrend = "falling"
+)
+
+func (t LatencyTrend) String() string {
+	if t == "" {
+		return string(LatencyTrendUnknown)
+	}
+	return string(t)
+}
+
+type DNSLatencyWindow struct {
+	Last    time.Duration
+	Average time.Duration
+	Max     time.Duration
+	Samples uint64
+	Trend   LatencyTrend
 }
 
 func hasFamily(bindings []string, family int) bool {

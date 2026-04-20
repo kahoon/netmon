@@ -22,6 +22,7 @@ const (
 	RefreshScopeListeners
 	RefreshScopeUpstream
 	RefreshScopeUnbound
+	RefreshScopePiHole
 )
 
 type Info struct {
@@ -34,6 +35,7 @@ type Info struct {
 	ListenerPoll         time.Duration
 	UpstreamPoll         time.Duration
 	UnboundPoll          time.Duration
+	PiHolePoll           time.Duration
 	RuntimeStatsInterval time.Duration
 	NtfyHost             string
 }
@@ -91,6 +93,7 @@ func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 		ListenerPoll:         m.cfg.ListenerPollInterval,
 		UpstreamPoll:         m.cfg.UpstreamPollInterval,
 		UnboundPoll:          m.cfg.UnboundPollInterval,
+		PiHolePoll:           m.cfg.PiHolePollInterval,
 		RuntimeStatsInterval: runtimeStatsInterval,
 		NtfyHost:             m.cfg.NtfyHost,
 	}, nil
@@ -149,6 +152,8 @@ func (m *Monitor) refreshWithReason(ctx context.Context, scope RefreshScope, rea
 		return m.RefreshUpstream(ctx, reason)
 	case RefreshScopeUnbound:
 		return m.RefreshUnbound(ctx, reason)
+	case RefreshScopePiHole:
+		return m.RefreshPiHole(ctx, reason)
 	case RefreshScopeAll:
 		fallthrough
 	default:
@@ -161,7 +166,10 @@ func (m *Monitor) refreshWithReason(ctx context.Context, scope RefreshScope, rea
 		if err := m.RefreshUpstream(ctx, reason); err != nil {
 			return err
 		}
-		return m.RefreshUnbound(ctx, reason)
+		if err := m.RefreshUnbound(ctx, reason); err != nil {
+			return err
+		}
+		return m.RefreshPiHole(ctx, reason)
 	}
 }
 
@@ -175,6 +183,8 @@ func formatRefreshScope(scope RefreshScope) string {
 		return "upstream"
 	case RefreshScopeUnbound:
 		return "unbound"
+	case RefreshScopePiHole:
+		return "pihole"
 	default:
 		return "all"
 	}

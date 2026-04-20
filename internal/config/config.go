@@ -19,6 +19,7 @@ const (
 	defaultListenerInterval     = 10 * time.Minute
 	defaultUpstreamInterval     = 5 * time.Minute
 	defaultUnboundInterval      = 5 * time.Minute
+	defaultPiHoleInterval       = 5 * time.Minute
 	defaultHTTPTimeout          = 10 * time.Second
 	defaultDNSProbeTimeout      = 2 * time.Second
 	defaultRuntimeStatsInterval = 7 * 24 * time.Hour
@@ -33,15 +34,17 @@ type Config struct {
 	ExpectedULA      string
 	DebugEvents      bool
 
-	NtfyHost      string
-	NtfyResolver  string
-	RPCSocketPath string
+	NtfyHost       string
+	NtfyResolver   string
+	RPCSocketPath  string
+	PiHolePassword string
 
 	NetlinkDebounce       time.Duration
 	InterfacePollInterval time.Duration
 	ListenerPollInterval  time.Duration
 	UpstreamPollInterval  time.Duration
 	UnboundPollInterval   time.Duration
+	PiHolePollInterval    time.Duration
 	HTTPTimeout           time.Duration
 	DNSProbeTimeout       time.Duration
 	RuntimeStatsInterval  time.Duration
@@ -56,12 +59,14 @@ func LoadConfig() Config {
 		NtfyHost:         getenvDefault("NTFY_HOST", defaultNtfyHost),
 		NtfyResolver:     getenvDefault("NTFY_RESOLVER", defaultNtfyResolver),
 		RPCSocketPath:    getenvDefault("RPC_SOCKET_PATH", defaultRPCSocketPath),
+		PiHolePassword:   getenvDefault("PIHOLE_PASSWORD", ""),
 
 		NetlinkDebounce:       defaultNetlinkDebounce,
 		InterfacePollInterval: defaultInterfaceInterval,
 		ListenerPollInterval:  defaultListenerInterval,
 		UpstreamPollInterval:  defaultUpstreamInterval,
 		UnboundPollInterval:   getenvDuration("UNBOUND_POLL_INTERVAL", defaultUnboundInterval),
+		PiHolePollInterval:    getenvDuration("PIHOLE_POLL_INTERVAL", defaultPiHoleInterval),
 		HTTPTimeout:           defaultHTTPTimeout,
 		DNSProbeTimeout:       defaultDNSProbeTimeout,
 		RuntimeStatsInterval:  getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),

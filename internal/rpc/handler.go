@@ -151,6 +151,7 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 		Unbound: &netmonv1.UnboundState{
 			Dnssec: mapDNSSECProbeResult(state.Unbound.DNSSEC),
 		},
+		Pihole: mapPiHoleState(state.PiHole),
 	}), nil
 }
 
@@ -168,6 +169,7 @@ func (h *Handler) GetInfo(ctx context.Context, _ *connect.Request[netmonv1.GetIn
 		ListenerPoll:         info.ListenerPoll.String(),
 		UpstreamPoll:         info.UpstreamPoll.String(),
 		UnboundPoll:          info.UnboundPoll.String(),
+		PiholePoll:           info.PiHolePoll.String(),
 		RuntimeStatsInterval: info.RuntimeStatsInterval.String(),
 		NtfyHost:             info.NtfyHost,
 		Commit:               info.Commit,
@@ -375,6 +377,8 @@ func mapRefreshScope(scope netmonv1.RefreshScope) (monitor.RefreshScope, error) 
 		return monitor.RefreshScopeUpstream, nil
 	case netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND:
 		return monitor.RefreshScopeUnbound, nil
+	case netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE:
+		return monitor.RefreshScopePiHole, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope: %s", scope.String())
 	}
@@ -436,6 +440,77 @@ func mapDNSSECProbeAttempt(attempt model.DNSSECProbeAttempt) *netmonv1.DnssecPro
 	}
 	if attempt.Latency != 0 {
 		out.Latency = durationpb.New(attempt.Latency)
+	}
+	return out
+}
+
+func mapPiHoleState(state model.PiHoleState) *netmonv1.PiHoleState {
+	return &netmonv1.PiHoleState{
+		DnsV4:       mapDNSProbe(state.DNSV4),
+		DnsV6:       mapDNSProbe(state.DNSV6),
+		Status:      mapPiHoleStatus(state.Status),
+		Upstreams:   mapPiHoleUpstreams(state.Upstreams),
+		Gravity:     mapPiHoleGravity(state.Gravity),
+		Counters:    mapPiHoleCounters(state.Counters),
+		LatencyIpv4: mapDNSLatencyWindow(state.LatencyIPv4),
+		LatencyIpv6: mapDNSLatencyWindow(state.LatencyIPv6),
+	}
+}
+
+func mapPiHoleStatus(status model.PiHoleStatus) *netmonv1.PiHoleStatus {
+	return &netmonv1.PiHoleStatus{
+		Blocking:    status.Blocking,
+		Detail:      status.Detail,
+		CoreVersion: status.CoreVersion,
+		WebVersion:  status.WebVersion,
+		FtlVersion:  status.FTLVersion,
+	}
+}
+
+func mapPiHoleUpstreams(upstreams model.PiHoleUpstreams) *netmonv1.PiHoleUpstreams {
+	return &netmonv1.PiHoleUpstreams{
+		Servers:         slices.Clone(upstreams.Servers),
+		MatchesExpected: upstreams.MatchesExpected,
+		Detail:          upstreams.Detail,
+	}
+}
+
+func mapPiHoleGravity(gravity model.PiHoleGravity) *netmonv1.PiHoleGravity {
+	out := &netmonv1.PiHoleGravity{
+		DomainsBlocked: gravity.DomainsBlocked,
+		Stale:          gravity.Stale,
+		Detail:         gravity.Detail,
+	}
+	if !gravity.LastUpdated.IsZero() {
+		out.LastUpdated = timestamppb.New(gravity.LastUpdated)
+	}
+	return out
+}
+
+func mapPiHoleCounters(counters model.PiHoleCounters) *netmonv1.PiHoleCounters {
+	return &netmonv1.PiHoleCounters{
+		QueriesTotal:   counters.QueriesTotal,
+		QueriesBlocked: counters.QueriesBlocked,
+		CacheHits:      counters.CacheHits,
+		Forwarded:      counters.Forwarded,
+		ClientsActive:  counters.ClientsActive,
+		Detail:         counters.Detail,
+	}
+}
+
+func mapDNSLatencyWindow(window model.DNSLatencyWindow) *netmonv1.DnsLatencyWindow {
+	out := &netmonv1.DnsLatencyWindow{
+		Samples: window.Samples,
+		Trend:   window.Trend.String(),
+	}
+	if window.Last != 0 {
+		out.Last = durationpb.New(window.Last)
+	}
+	if window.Average != 0 {
+		out.Average = durationpb.New(window.Average)
+	}
+	if window.Max != 0 {
+		out.Max = durationpb.New(window.Max)
 	}
 	return out
 }

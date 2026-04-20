@@ -64,6 +64,20 @@ func CopySystemState(in SystemState) SystemState {
 		Unbound: UnboundState{
 			DNSSEC: in.Unbound.DNSSEC,
 		},
+		PiHole: PiHoleState{
+			DNSV4:  in.PiHole.DNSV4,
+			DNSV6:  in.PiHole.DNSV6,
+			Status: in.PiHole.Status,
+			Upstreams: PiHoleUpstreams{
+				Servers:         append([]string{}, in.PiHole.Upstreams.Servers...),
+				MatchesExpected: in.PiHole.Upstreams.MatchesExpected,
+				Detail:          in.PiHole.Upstreams.Detail,
+			},
+			Gravity:     in.PiHole.Gravity,
+			Counters:    in.PiHole.Counters,
+			LatencyIPv4: in.PiHole.LatencyIPv4,
+			LatencyIPv6: in.PiHole.LatencyIPv6,
+		},
 	}
 }
 

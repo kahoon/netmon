@@ -43,7 +43,7 @@ func (c UnboundCollector) queryDNSSECPositive(ctx context.Context) model.DNSSECP
 	msg.RecursionDesired = true
 	msg.SetEdns0(1232, true)
 
-	answer, latency, err := dnsExchange(ctx, c.ProbeTimeout, "udp4", localUnbound, localUnboundPort, msg)
+	answer, latency, err := exchange(ctx, c.ProbeTimeout, "udp4", localUnbound, localUnboundPort, msg)
 	if err != nil {
 		return model.DNSSECProbeAttempt{
 			Name:    dnssecPositive,
@@ -69,7 +69,7 @@ func (c UnboundCollector) queryDNSSECNegative(ctx context.Context) model.DNSSECP
 	msg.RecursionDesired = true
 	msg.SetEdns0(1232, true)
 
-	answer, latency, err := dnsExchange(ctx, c.ProbeTimeout, "udp4", localUnbound, localUnboundPort, msg)
+	answer, latency, err := exchange(ctx, c.ProbeTimeout, "udp4", localUnbound, localUnboundPort, msg)
 	if err != nil {
 		return model.DNSSECProbeAttempt{
 			Name:    dnssecNegative,

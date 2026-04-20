@@ -222,7 +222,7 @@ func (c UpstreamCollector) queryPublicIP(ctx context.Context, network string, pr
 }
 
 func (c UpstreamCollector) exchange(ctx context.Context, network, host, port string, msg *dns.Msg) (*dns.Msg, time.Duration, error) {
-	return dnsExchange(ctx, c.ProbeTimeout, network, host, port, msg)
+	return exchange(ctx, c.ProbeTimeout, network, host, port, msg)
 }
 
 func validateRootNSAnswer(answer *dns.Msg) (model.DNSProbeStatus, string) {

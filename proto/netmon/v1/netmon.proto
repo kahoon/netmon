@@ -35,6 +35,7 @@ enum RefreshScope {
   REFRESH_SCOPE_LISTENERS = 3;
   REFRESH_SCOPE_UPSTREAM = 4;
   REFRESH_SCOPE_UNBOUND = 5;
+  REFRESH_SCOPE_PIHOLE = 6;
 }
 
 enum TaskEventKind {
@@ -174,11 +175,61 @@ message UnboundState {
   DnssecProbeResult dnssec = 1;
 }
 
+message PiHoleStatus {
+  string blocking = 1;
+  string detail = 2;
+  string core_version = 3;
+  string web_version = 4;
+  string ftl_version = 5;
+}
+
+message PiHoleUpstreams {
+  repeated string servers = 1;
+  bool matches_expected = 2;
+  string detail = 3;
+}
+
+message PiHoleGravity {
+  google.protobuf.Timestamp last_updated = 1;
+  uint64 domains_blocked = 2;
+  bool stale = 3;
+  string detail = 4;
+}
+
+message PiHoleCounters {
+  uint64 queries_total = 1;
+  uint64 queries_blocked = 2;
+  uint64 cache_hits = 3;
+  uint64 forwarded = 4;
+  uint64 clients_active = 5;
+  string detail = 6;
+}
+
+message DnsLatencyWindow {
+  google.protobuf.Duration last = 1;
+  google.protobuf.Duration average = 2;
+  google.protobuf.Duration max = 3;
+  uint64 samples = 4;
+  string trend = 5;
+}
+
+message PiHoleState {
+  DnsProbeResult dns_v4 = 1;
+  DnsProbeResult dns_v6 = 2;
+  PiHoleStatus status = 3;
+  PiHoleUpstreams upstreams = 4;
+  PiHoleGravity gravity = 5;
+  PiHoleCounters counters = 6;
+  DnsLatencyWindow latency_ipv4 = 7;
+  DnsLatencyWindow latency_ipv6 = 8;
+}
+
 message GetStateResponse {
   InterfaceState interface = 1;
   ListenerState listeners = 2;
   UpstreamState upstream = 3;
   UnboundState unbound = 4;
+  PiHoleState pihole = 5;
 }
 
 message GetInfoRequest {}
@@ -195,6 +246,7 @@ message GetInfoResponse {
   string commit = 9;
   string build_time = 10;
   string unbound_poll = 11;
+  string pihole_poll = 12;
 }
 
 message GetStatsRequest {}

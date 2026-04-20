@@ -23,6 +23,7 @@ type Monitor struct {
 	listenerCollector  collector.ListenerCollector
 	upstreamCollector  collector.UpstreamCollector
 	unboundCollector   collector.UnboundCollector
+	piholeCollector    *collector.PiHoleCollector
 
 	mu     sync.Mutex
 	state  model.SystemState
@@ -46,6 +47,7 @@ func NewMonitor(cfg config.Config) *Monitor {
 		listenerCollector:    collector.ListenerCollector{},
 		upstreamCollector:    collector.UpstreamCollector{ProbeTimeout: cfg.DNSProbeTimeout},
 		unboundCollector:     collector.UnboundCollector{ProbeTimeout: cfg.DNSProbeTimeout},
+		piholeCollector:      collector.NewPiHoleCollector(cfg),
 		debug:                cfg.DebugEvents,
 		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
@@ -75,11 +77,13 @@ func (m *Monitor) Initialize(ctx context.Context) error {
 
 	upstream := m.upstreamCollector.Collect(ctx)
 	unbound := m.unboundCollector.Collect(ctx)
+	pihole := m.piholeCollector.Collect(ctx)
 	state := model.SystemState{
 		Interface: iface,
 		Listeners: listeners,
 		Upstream:  upstream,
 		Unbound:   unbound,
+		PiHole:    pihole,
 	}
 	checks := model.EvaluateChecks(m.cfg.ExpectedULA, state)
 
@@ -170,6 +174,22 @@ func (m *Monitor) RefreshUnbound(ctx context.Context, reason string) error {
 
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Unbound = state
+	})
+
+	return nil
+}
+
+func (m *Monitor) RefreshPiHole(ctx context.Context, reason string) error {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "pihole", reason, func(context.Context) (model.PiHoleState, error) {
+		return m.piholeCollector.Collect(ctx), nil
+	})
+	if err != nil {
+		return err
+	}
+
+	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
+		current.PiHole = state
 	})
 
 	return nil

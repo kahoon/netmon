@@ -65,19 +65,21 @@ Examples:
 		help: `Run a traced refresh and stream the causal path end to end.
 
 Scopes:
-  all         Trace interface, listeners, upstream, and unbound refresh work.
+  all         Trace interface, listeners, upstream, unbound, and pihole refresh work.
   interface   Trace only interface collection.
   listeners   Trace only listener collection.
   upstream    Trace only upstream probes.
   unbound     Trace only unbound probes.
+  pihole      Trace only Pi-hole collection.
 
 Usage:
-  netmonctl trace [-socket path] [-no-trace-id] [-scope all|interface|listeners|upstream|unbound]
+  netmonctl trace [-socket path] [-no-trace-id] [-scope all|interface|listeners|upstream|unbound|pihole]
 
 Examples:
   netmonctl trace
   netmonctl trace -scope upstream
   netmonctl trace -scope unbound
+  netmonctl trace -scope pihole
 `,
 		run: runTrace,
 	},
@@ -148,19 +150,21 @@ Examples:
 		help: `Trigger an immediate refresh in the running daemon.
 
 Scopes:
-  all         Refresh interface, listeners, upstream, and unbound state.
+  all         Refresh interface, listeners, upstream, unbound, and pihole state.
   interface   Refresh only interface state.
   listeners   Refresh only listener state.
   upstream    Refresh only upstream probes.
   unbound     Refresh only unbound probes.
+  pihole      Refresh only Pi-hole state.
 
 Usage:
-  netmonctl refresh [-socket path] [-scope all|interface|listeners|upstream|unbound]
+  netmonctl refresh [-socket path] [-scope all|interface|listeners|upstream|unbound|pihole]
 
 Examples:
   netmonctl refresh
   netmonctl refresh -scope upstream
   netmonctl refresh -scope unbound
+  netmonctl refresh -scope pihole
 `,
 		run: runRefresh,
 	},
@@ -241,6 +245,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  netmonctl checks -all")
 	fmt.Fprintln(w, "  netmonctl state -json")
 	fmt.Fprintln(w, "  netmonctl stats")
+	fmt.Fprintln(w, "  netmonctl refresh -scope pihole")
 	fmt.Fprintln(w, "  netmonctl refresh -scope unbound")
 	fmt.Fprintln(w, "  netmonctl set runtime-stats-interval 30m")
 	fmt.Fprintln(w, "  netmonctl help refresh")

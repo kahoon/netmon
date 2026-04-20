@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestInterfaceOperationalCheck(t *testing.T) {
 	t.Parallel()
@@ -116,4 +119,53 @@ func TestDNSSECValidationCheck(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPiHoleChecks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("dns failure is critical", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeDNSCheck(checkPiHoleDNSV4, "IPv4", DNSProbeResult{
+			Status: DNSProbeStatusTimeout,
+			Detail: "timeout",
+		})
+		if got.Severity != SeverityCrit {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
+		}
+	})
+
+	t.Run("blocking disabled is critical", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeBlockingCheck(PiHoleStatus{Blocking: "disabled"})
+		if got.Severity != SeverityCrit {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
+		}
+	})
+
+	t.Run("upstream mismatch is critical", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeUpstreamsCheck(PiHoleUpstreams{
+			Servers:         []string{"8.8.8.8#53"},
+			MatchesExpected: false,
+		})
+		if got.Severity != SeverityCrit {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
+		}
+	})
+
+	t.Run("stale gravity warns", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeGravityCheck(PiHoleGravity{
+			LastUpdated: time.Now().Add(-8 * 24 * time.Hour),
+			Stale:       true,
+		})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+	})
 }

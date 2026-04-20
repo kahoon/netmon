@@ -87,6 +87,7 @@ const (
 	RefreshScope_REFRESH_SCOPE_LISTENERS   RefreshScope = 3
 	RefreshScope_REFRESH_SCOPE_UPSTREAM    RefreshScope = 4
 	RefreshScope_REFRESH_SCOPE_UNBOUND     RefreshScope = 5
+	RefreshScope_REFRESH_SCOPE_PIHOLE      RefreshScope = 6
 )
 
 // Enum value maps for RefreshScope.
@@ -98,6 +99,7 @@ var (
 		3: "REFRESH_SCOPE_LISTENERS",
 		4: "REFRESH_SCOPE_UPSTREAM",
 		5: "REFRESH_SCOPE_UNBOUND",
+		6: "REFRESH_SCOPE_PIHOLE",
 	}
 	RefreshScope_value = map[string]int32{
 		"REFRESH_SCOPE_UNSPECIFIED": 0,
@@ -106,6 +108,7 @@ var (
 		"REFRESH_SCOPE_LISTENERS":   3,
 		"REFRESH_SCOPE_UPSTREAM":    4,
 		"REFRESH_SCOPE_UNBOUND":     5,
+		"REFRESH_SCOPE_PIHOLE":      6,
 	}
 )
 
@@ -1481,19 +1484,484 @@ func (x *UnboundState) GetDnssec() *DnssecProbeResult {
 	return nil
 }
 
+type PiHoleStatus struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Blocking      string                 `protobuf:"bytes,1,opt,name=blocking,proto3" json:"blocking,omitempty"`
+	Detail        string                 `protobuf:"bytes,2,opt,name=detail,proto3" json:"detail,omitempty"`
+	CoreVersion   string                 `protobuf:"bytes,3,opt,name=core_version,json=coreVersion,proto3" json:"core_version,omitempty"`
+	WebVersion    string                 `protobuf:"bytes,4,opt,name=web_version,json=webVersion,proto3" json:"web_version,omitempty"`
+	FtlVersion    string                 `protobuf:"bytes,5,opt,name=ftl_version,json=ftlVersion,proto3" json:"ftl_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PiHoleStatus) Reset() {
+	*x = PiHoleStatus{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PiHoleStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PiHoleStatus) ProtoMessage() {}
+
+func (x *PiHoleStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PiHoleStatus.ProtoReflect.Descriptor instead.
+func (*PiHoleStatus) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *PiHoleStatus) GetBlocking() string {
+	if x != nil {
+		return x.Blocking
+	}
+	return ""
+}
+
+func (x *PiHoleStatus) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+func (x *PiHoleStatus) GetCoreVersion() string {
+	if x != nil {
+		return x.CoreVersion
+	}
+	return ""
+}
+
+func (x *PiHoleStatus) GetWebVersion() string {
+	if x != nil {
+		return x.WebVersion
+	}
+	return ""
+}
+
+func (x *PiHoleStatus) GetFtlVersion() string {
+	if x != nil {
+		return x.FtlVersion
+	}
+	return ""
+}
+
+type PiHoleUpstreams struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Servers         []string               `protobuf:"bytes,1,rep,name=servers,proto3" json:"servers,omitempty"`
+	MatchesExpected bool                   `protobuf:"varint,2,opt,name=matches_expected,json=matchesExpected,proto3" json:"matches_expected,omitempty"`
+	Detail          string                 `protobuf:"bytes,3,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *PiHoleUpstreams) Reset() {
+	*x = PiHoleUpstreams{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PiHoleUpstreams) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PiHoleUpstreams) ProtoMessage() {}
+
+func (x *PiHoleUpstreams) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PiHoleUpstreams.ProtoReflect.Descriptor instead.
+func (*PiHoleUpstreams) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *PiHoleUpstreams) GetServers() []string {
+	if x != nil {
+		return x.Servers
+	}
+	return nil
+}
+
+func (x *PiHoleUpstreams) GetMatchesExpected() bool {
+	if x != nil {
+		return x.MatchesExpected
+	}
+	return false
+}
+
+func (x *PiHoleUpstreams) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type PiHoleGravity struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	LastUpdated    *timestamppb.Timestamp `protobuf:"bytes,1,opt,name=last_updated,json=lastUpdated,proto3" json:"last_updated,omitempty"`
+	DomainsBlocked uint64                 `protobuf:"varint,2,opt,name=domains_blocked,json=domainsBlocked,proto3" json:"domains_blocked,omitempty"`
+	Stale          bool                   `protobuf:"varint,3,opt,name=stale,proto3" json:"stale,omitempty"`
+	Detail         string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PiHoleGravity) Reset() {
+	*x = PiHoleGravity{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PiHoleGravity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PiHoleGravity) ProtoMessage() {}
+
+func (x *PiHoleGravity) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PiHoleGravity.ProtoReflect.Descriptor instead.
+func (*PiHoleGravity) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *PiHoleGravity) GetLastUpdated() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastUpdated
+	}
+	return nil
+}
+
+func (x *PiHoleGravity) GetDomainsBlocked() uint64 {
+	if x != nil {
+		return x.DomainsBlocked
+	}
+	return 0
+}
+
+func (x *PiHoleGravity) GetStale() bool {
+	if x != nil {
+		return x.Stale
+	}
+	return false
+}
+
+func (x *PiHoleGravity) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type PiHoleCounters struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	QueriesTotal   uint64                 `protobuf:"varint,1,opt,name=queries_total,json=queriesTotal,proto3" json:"queries_total,omitempty"`
+	QueriesBlocked uint64                 `protobuf:"varint,2,opt,name=queries_blocked,json=queriesBlocked,proto3" json:"queries_blocked,omitempty"`
+	CacheHits      uint64                 `protobuf:"varint,3,opt,name=cache_hits,json=cacheHits,proto3" json:"cache_hits,omitempty"`
+	Forwarded      uint64                 `protobuf:"varint,4,opt,name=forwarded,proto3" json:"forwarded,omitempty"`
+	ClientsActive  uint64                 `protobuf:"varint,5,opt,name=clients_active,json=clientsActive,proto3" json:"clients_active,omitempty"`
+	Detail         string                 `protobuf:"bytes,6,opt,name=detail,proto3" json:"detail,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *PiHoleCounters) Reset() {
+	*x = PiHoleCounters{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PiHoleCounters) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PiHoleCounters) ProtoMessage() {}
+
+func (x *PiHoleCounters) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PiHoleCounters.ProtoReflect.Descriptor instead.
+func (*PiHoleCounters) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *PiHoleCounters) GetQueriesTotal() uint64 {
+	if x != nil {
+		return x.QueriesTotal
+	}
+	return 0
+}
+
+func (x *PiHoleCounters) GetQueriesBlocked() uint64 {
+	if x != nil {
+		return x.QueriesBlocked
+	}
+	return 0
+}
+
+func (x *PiHoleCounters) GetCacheHits() uint64 {
+	if x != nil {
+		return x.CacheHits
+	}
+	return 0
+}
+
+func (x *PiHoleCounters) GetForwarded() uint64 {
+	if x != nil {
+		return x.Forwarded
+	}
+	return 0
+}
+
+func (x *PiHoleCounters) GetClientsActive() uint64 {
+	if x != nil {
+		return x.ClientsActive
+	}
+	return 0
+}
+
+func (x *PiHoleCounters) GetDetail() string {
+	if x != nil {
+		return x.Detail
+	}
+	return ""
+}
+
+type DnsLatencyWindow struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Last          *durationpb.Duration   `protobuf:"bytes,1,opt,name=last,proto3" json:"last,omitempty"`
+	Average       *durationpb.Duration   `protobuf:"bytes,2,opt,name=average,proto3" json:"average,omitempty"`
+	Max           *durationpb.Duration   `protobuf:"bytes,3,opt,name=max,proto3" json:"max,omitempty"`
+	Samples       uint64                 `protobuf:"varint,4,opt,name=samples,proto3" json:"samples,omitempty"`
+	Trend         string                 `protobuf:"bytes,5,opt,name=trend,proto3" json:"trend,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DnsLatencyWindow) Reset() {
+	*x = DnsLatencyWindow{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DnsLatencyWindow) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DnsLatencyWindow) ProtoMessage() {}
+
+func (x *DnsLatencyWindow) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DnsLatencyWindow.ProtoReflect.Descriptor instead.
+func (*DnsLatencyWindow) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *DnsLatencyWindow) GetLast() *durationpb.Duration {
+	if x != nil {
+		return x.Last
+	}
+	return nil
+}
+
+func (x *DnsLatencyWindow) GetAverage() *durationpb.Duration {
+	if x != nil {
+		return x.Average
+	}
+	return nil
+}
+
+func (x *DnsLatencyWindow) GetMax() *durationpb.Duration {
+	if x != nil {
+		return x.Max
+	}
+	return nil
+}
+
+func (x *DnsLatencyWindow) GetSamples() uint64 {
+	if x != nil {
+		return x.Samples
+	}
+	return 0
+}
+
+func (x *DnsLatencyWindow) GetTrend() string {
+	if x != nil {
+		return x.Trend
+	}
+	return ""
+}
+
+type PiHoleState struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DnsV4         *DnsProbeResult        `protobuf:"bytes,1,opt,name=dns_v4,json=dnsV4,proto3" json:"dns_v4,omitempty"`
+	DnsV6         *DnsProbeResult        `protobuf:"bytes,2,opt,name=dns_v6,json=dnsV6,proto3" json:"dns_v6,omitempty"`
+	Status        *PiHoleStatus          `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Upstreams     *PiHoleUpstreams       `protobuf:"bytes,4,opt,name=upstreams,proto3" json:"upstreams,omitempty"`
+	Gravity       *PiHoleGravity         `protobuf:"bytes,5,opt,name=gravity,proto3" json:"gravity,omitempty"`
+	Counters      *PiHoleCounters        `protobuf:"bytes,6,opt,name=counters,proto3" json:"counters,omitempty"`
+	LatencyIpv4   *DnsLatencyWindow      `protobuf:"bytes,7,opt,name=latency_ipv4,json=latencyIpv4,proto3" json:"latency_ipv4,omitempty"`
+	LatencyIpv6   *DnsLatencyWindow      `protobuf:"bytes,8,opt,name=latency_ipv6,json=latencyIpv6,proto3" json:"latency_ipv6,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PiHoleState) Reset() {
+	*x = PiHoleState{}
+	mi := &file_netmon_v1_netmon_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PiHoleState) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PiHoleState) ProtoMessage() {}
+
+func (x *PiHoleState) ProtoReflect() protoreflect.Message {
+	mi := &file_netmon_v1_netmon_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PiHoleState.ProtoReflect.Descriptor instead.
+func (*PiHoleState) Descriptor() ([]byte, []int) {
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *PiHoleState) GetDnsV4() *DnsProbeResult {
+	if x != nil {
+		return x.DnsV4
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetDnsV6() *DnsProbeResult {
+	if x != nil {
+		return x.DnsV6
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetStatus() *PiHoleStatus {
+	if x != nil {
+		return x.Status
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetUpstreams() *PiHoleUpstreams {
+	if x != nil {
+		return x.Upstreams
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetGravity() *PiHoleGravity {
+	if x != nil {
+		return x.Gravity
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetCounters() *PiHoleCounters {
+	if x != nil {
+		return x.Counters
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetLatencyIpv4() *DnsLatencyWindow {
+	if x != nil {
+		return x.LatencyIpv4
+	}
+	return nil
+}
+
+func (x *PiHoleState) GetLatencyIpv6() *DnsLatencyWindow {
+	if x != nil {
+		return x.LatencyIpv6
+	}
+	return nil
+}
+
 type GetStateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Interface     *InterfaceState        `protobuf:"bytes,1,opt,name=interface,proto3" json:"interface,omitempty"`
 	Listeners     *ListenerState         `protobuf:"bytes,2,opt,name=listeners,proto3" json:"listeners,omitempty"`
 	Upstream      *UpstreamState         `protobuf:"bytes,3,opt,name=upstream,proto3" json:"upstream,omitempty"`
 	Unbound       *UnboundState          `protobuf:"bytes,4,opt,name=unbound,proto3" json:"unbound,omitempty"`
+	Pihole        *PiHoleState           `protobuf:"bytes,5,opt,name=pihole,proto3" json:"pihole,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetStateResponse) Reset() {
 	*x = GetStateResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[21]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1505,7 +1973,7 @@ func (x *GetStateResponse) String() string {
 func (*GetStateResponse) ProtoMessage() {}
 
 func (x *GetStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[21]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,7 +1986,7 @@ func (x *GetStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStateResponse.ProtoReflect.Descriptor instead.
 func (*GetStateResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{21}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetStateResponse) GetInterface() *InterfaceState {
@@ -1549,6 +2017,13 @@ func (x *GetStateResponse) GetUnbound() *UnboundState {
 	return nil
 }
 
+func (x *GetStateResponse) GetPihole() *PiHoleState {
+	if x != nil {
+		return x.Pihole
+	}
+	return nil
+}
+
 type GetInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1557,7 +2032,7 @@ type GetInfoRequest struct {
 
 func (x *GetInfoRequest) Reset() {
 	*x = GetInfoRequest{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[22]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1569,7 +2044,7 @@ func (x *GetInfoRequest) String() string {
 func (*GetInfoRequest) ProtoMessage() {}
 
 func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[22]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1582,7 +2057,7 @@ func (x *GetInfoRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoRequest.ProtoReflect.Descriptor instead.
 func (*GetInfoRequest) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{22}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{28}
 }
 
 type GetInfoResponse struct {
@@ -1598,13 +2073,14 @@ type GetInfoResponse struct {
 	Commit               string                 `protobuf:"bytes,9,opt,name=commit,proto3" json:"commit,omitempty"`
 	BuildTime            string                 `protobuf:"bytes,10,opt,name=build_time,json=buildTime,proto3" json:"build_time,omitempty"`
 	UnboundPoll          string                 `protobuf:"bytes,11,opt,name=unbound_poll,json=unboundPoll,proto3" json:"unbound_poll,omitempty"`
+	PiholePoll           string                 `protobuf:"bytes,12,opt,name=pihole_poll,json=piholePoll,proto3" json:"pihole_poll,omitempty"`
 	unknownFields        protoimpl.UnknownFields
 	sizeCache            protoimpl.SizeCache
 }
 
 func (x *GetInfoResponse) Reset() {
 	*x = GetInfoResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[23]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1616,7 +2092,7 @@ func (x *GetInfoResponse) String() string {
 func (*GetInfoResponse) ProtoMessage() {}
 
 func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[23]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1629,7 +2105,7 @@ func (x *GetInfoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetInfoResponse.ProtoReflect.Descriptor instead.
 func (*GetInfoResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{23}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *GetInfoResponse) GetVersion() string {
@@ -1709,6 +2185,13 @@ func (x *GetInfoResponse) GetUnboundPoll() string {
 	return ""
 }
 
+func (x *GetInfoResponse) GetPiholePoll() string {
+	if x != nil {
+		return x.PiholePoll
+	}
+	return ""
+}
+
 type GetStatsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1717,7 +2200,7 @@ type GetStatsRequest struct {
 
 func (x *GetStatsRequest) Reset() {
 	*x = GetStatsRequest{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[24]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1729,7 +2212,7 @@ func (x *GetStatsRequest) String() string {
 func (*GetStatsRequest) ProtoMessage() {}
 
 func (x *GetStatsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[24]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1742,7 +2225,7 @@ func (x *GetStatsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatsRequest.ProtoReflect.Descriptor instead.
 func (*GetStatsRequest) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{24}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{30}
 }
 
 type OutcomeCounters struct {
@@ -1756,7 +2239,7 @@ type OutcomeCounters struct {
 
 func (x *OutcomeCounters) Reset() {
 	*x = OutcomeCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[25]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1768,7 +2251,7 @@ func (x *OutcomeCounters) String() string {
 func (*OutcomeCounters) ProtoMessage() {}
 
 func (x *OutcomeCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[25]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1781,7 +2264,7 @@ func (x *OutcomeCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutcomeCounters.ProtoReflect.Descriptor instead.
 func (*OutcomeCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{25}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *OutcomeCounters) GetTotal() uint64 {
@@ -1816,7 +2299,7 @@ type EventCounters struct {
 
 func (x *EventCounters) Reset() {
 	*x = EventCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[26]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1828,7 +2311,7 @@ func (x *EventCounters) String() string {
 func (*EventCounters) ProtoMessage() {}
 
 func (x *EventCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[26]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1841,7 +2324,7 @@ func (x *EventCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EventCounters.ProtoReflect.Descriptor instead.
 func (*EventCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{26}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *EventCounters) GetLink() uint64 {
@@ -1876,7 +2359,7 @@ type CollectorCounters struct {
 
 func (x *CollectorCounters) Reset() {
 	*x = CollectorCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[27]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1888,7 +2371,7 @@ func (x *CollectorCounters) String() string {
 func (*CollectorCounters) ProtoMessage() {}
 
 func (x *CollectorCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[27]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1901,7 +2384,7 @@ func (x *CollectorCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CollectorCounters.ProtoReflect.Descriptor instead.
 func (*CollectorCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{27}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *CollectorCounters) GetStarted() uint64 {
@@ -1939,7 +2422,7 @@ type TaskCounters struct {
 
 func (x *TaskCounters) Reset() {
 	*x = TaskCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[28]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1951,7 +2434,7 @@ func (x *TaskCounters) String() string {
 func (*TaskCounters) ProtoMessage() {}
 
 func (x *TaskCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[28]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1964,7 +2447,7 @@ func (x *TaskCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskCounters.ProtoReflect.Descriptor instead.
 func (*TaskCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{28}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *TaskCounters) GetScheduled() uint64 {
@@ -2021,7 +2504,7 @@ type CheckCounters struct {
 
 func (x *CheckCounters) Reset() {
 	*x = CheckCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[29]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2033,7 +2516,7 @@ func (x *CheckCounters) String() string {
 func (*CheckCounters) ProtoMessage() {}
 
 func (x *CheckCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[29]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2046,7 +2529,7 @@ func (x *CheckCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckCounters.ProtoReflect.Descriptor instead.
 func (*CheckCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{29}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *CheckCounters) GetEvaluations() uint64 {
@@ -2088,7 +2571,7 @@ type NotificationCounters struct {
 
 func (x *NotificationCounters) Reset() {
 	*x = NotificationCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[30]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2100,7 +2583,7 @@ func (x *NotificationCounters) String() string {
 func (*NotificationCounters) ProtoMessage() {}
 
 func (x *NotificationCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[30]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2113,7 +2596,7 @@ func (x *NotificationCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotificationCounters.ProtoReflect.Descriptor instead.
 func (*NotificationCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{30}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *NotificationCounters) GetSent() uint64 {
@@ -2148,7 +2631,7 @@ type TraceCounters struct {
 
 func (x *TraceCounters) Reset() {
 	*x = TraceCounters{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[31]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2160,7 +2643,7 @@ func (x *TraceCounters) String() string {
 func (*TraceCounters) ProtoMessage() {}
 
 func (x *TraceCounters) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[31]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2173,7 +2656,7 @@ func (x *TraceCounters) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceCounters.ProtoReflect.Descriptor instead.
 func (*TraceCounters) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{31}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *TraceCounters) GetStarted() uint64 {
@@ -2214,7 +2697,7 @@ type GetStatsResponse struct {
 
 func (x *GetStatsResponse) Reset() {
 	*x = GetStatsResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[32]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2226,7 +2709,7 @@ func (x *GetStatsResponse) String() string {
 func (*GetStatsResponse) ProtoMessage() {}
 
 func (x *GetStatsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[32]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2239,7 +2722,7 @@ func (x *GetStatsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetStatsResponse.ProtoReflect.Descriptor instead.
 func (*GetStatsResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{32}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *GetStatsResponse) GetEvents() *EventCounters {
@@ -2314,7 +2797,7 @@ type RefreshRequest struct {
 
 func (x *RefreshRequest) Reset() {
 	*x = RefreshRequest{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[33]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2326,7 +2809,7 @@ func (x *RefreshRequest) String() string {
 func (*RefreshRequest) ProtoMessage() {}
 
 func (x *RefreshRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[33]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2339,7 +2822,7 @@ func (x *RefreshRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshRequest.ProtoReflect.Descriptor instead.
 func (*RefreshRequest) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{33}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *RefreshRequest) GetScope() RefreshScope {
@@ -2357,7 +2840,7 @@ type RefreshResponse struct {
 
 func (x *RefreshResponse) Reset() {
 	*x = RefreshResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[34]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2369,7 +2852,7 @@ func (x *RefreshResponse) String() string {
 func (*RefreshResponse) ProtoMessage() {}
 
 func (x *RefreshResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[34]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2382,7 +2865,7 @@ func (x *RefreshResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RefreshResponse.ProtoReflect.Descriptor instead.
 func (*RefreshResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{34}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{40}
 }
 
 type SetRuntimeStatsIntervalRequest struct {
@@ -2394,7 +2877,7 @@ type SetRuntimeStatsIntervalRequest struct {
 
 func (x *SetRuntimeStatsIntervalRequest) Reset() {
 	*x = SetRuntimeStatsIntervalRequest{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[35]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2406,7 +2889,7 @@ func (x *SetRuntimeStatsIntervalRequest) String() string {
 func (*SetRuntimeStatsIntervalRequest) ProtoMessage() {}
 
 func (x *SetRuntimeStatsIntervalRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[35]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2419,7 +2902,7 @@ func (x *SetRuntimeStatsIntervalRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRuntimeStatsIntervalRequest.ProtoReflect.Descriptor instead.
 func (*SetRuntimeStatsIntervalRequest) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{35}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *SetRuntimeStatsIntervalRequest) GetInterval() *durationpb.Duration {
@@ -2438,7 +2921,7 @@ type SetRuntimeStatsIntervalResponse struct {
 
 func (x *SetRuntimeStatsIntervalResponse) Reset() {
 	*x = SetRuntimeStatsIntervalResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[36]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2450,7 +2933,7 @@ func (x *SetRuntimeStatsIntervalResponse) String() string {
 func (*SetRuntimeStatsIntervalResponse) ProtoMessage() {}
 
 func (x *SetRuntimeStatsIntervalResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[36]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2463,7 +2946,7 @@ func (x *SetRuntimeStatsIntervalResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetRuntimeStatsIntervalResponse.ProtoReflect.Descriptor instead.
 func (*SetRuntimeStatsIntervalResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{36}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *SetRuntimeStatsIntervalResponse) GetInterval() *durationpb.Duration {
@@ -2482,7 +2965,7 @@ type SetDebugRequest struct {
 
 func (x *SetDebugRequest) Reset() {
 	*x = SetDebugRequest{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[37]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2494,7 +2977,7 @@ func (x *SetDebugRequest) String() string {
 func (*SetDebugRequest) ProtoMessage() {}
 
 func (x *SetDebugRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[37]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2507,7 +2990,7 @@ func (x *SetDebugRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDebugRequest.ProtoReflect.Descriptor instead.
 func (*SetDebugRequest) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{37}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SetDebugRequest) GetDebug() bool {
@@ -2525,7 +3008,7 @@ type SetDebugResponse struct {
 
 func (x *SetDebugResponse) Reset() {
 	*x = SetDebugResponse{}
-	mi := &file_netmon_v1_netmon_proto_msgTypes[38]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2537,7 +3020,7 @@ func (x *SetDebugResponse) String() string {
 func (*SetDebugResponse) ProtoMessage() {}
 
 func (x *SetDebugResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_netmon_v1_netmon_proto_msgTypes[38]
+	mi := &file_netmon_v1_netmon_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2550,7 +3033,7 @@ func (x *SetDebugResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDebugResponse.ProtoReflect.Descriptor instead.
 func (*SetDebugResponse) Descriptor() ([]byte, []int) {
-	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{38}
+	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{44}
 }
 
 var File_netmon_v1_netmon_proto protoreflect.FileDescriptor
@@ -2655,13 +3138,54 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\vpublic_ipv6\x18\x06 \x01(\v2\x1e.netmon.v1.PublicIPObservationR\n" +
 	"publicIpv6J\x04\b\a\x10\bR\x06dnssec\"D\n" +
 	"\fUnboundState\x124\n" +
-	"\x06dnssec\x18\x01 \x01(\v2\x1c.netmon.v1.DnssecProbeResultR\x06dnssec\"\xec\x01\n" +
+	"\x06dnssec\x18\x01 \x01(\v2\x1c.netmon.v1.DnssecProbeResultR\x06dnssec\"\xa7\x01\n" +
+	"\fPiHoleStatus\x12\x1a\n" +
+	"\bblocking\x18\x01 \x01(\tR\bblocking\x12\x16\n" +
+	"\x06detail\x18\x02 \x01(\tR\x06detail\x12!\n" +
+	"\fcore_version\x18\x03 \x01(\tR\vcoreVersion\x12\x1f\n" +
+	"\vweb_version\x18\x04 \x01(\tR\n" +
+	"webVersion\x12\x1f\n" +
+	"\vftl_version\x18\x05 \x01(\tR\n" +
+	"ftlVersion\"n\n" +
+	"\x0fPiHoleUpstreams\x12\x18\n" +
+	"\aservers\x18\x01 \x03(\tR\aservers\x12)\n" +
+	"\x10matches_expected\x18\x02 \x01(\bR\x0fmatchesExpected\x12\x16\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xa5\x01\n" +
+	"\rPiHoleGravity\x12=\n" +
+	"\flast_updated\x18\x01 \x01(\v2\x1a.google.protobuf.TimestampR\vlastUpdated\x12'\n" +
+	"\x0fdomains_blocked\x18\x02 \x01(\x04R\x0edomainsBlocked\x12\x14\n" +
+	"\x05stale\x18\x03 \x01(\bR\x05stale\x12\x16\n" +
+	"\x06detail\x18\x04 \x01(\tR\x06detail\"\xda\x01\n" +
+	"\x0ePiHoleCounters\x12#\n" +
+	"\rqueries_total\x18\x01 \x01(\x04R\fqueriesTotal\x12'\n" +
+	"\x0fqueries_blocked\x18\x02 \x01(\x04R\x0equeriesBlocked\x12\x1d\n" +
+	"\n" +
+	"cache_hits\x18\x03 \x01(\x04R\tcacheHits\x12\x1c\n" +
+	"\tforwarded\x18\x04 \x01(\x04R\tforwarded\x12%\n" +
+	"\x0eclients_active\x18\x05 \x01(\x04R\rclientsActive\x12\x16\n" +
+	"\x06detail\x18\x06 \x01(\tR\x06detail\"\xd3\x01\n" +
+	"\x10DnsLatencyWindow\x12-\n" +
+	"\x04last\x18\x01 \x01(\v2\x19.google.protobuf.DurationR\x04last\x123\n" +
+	"\aaverage\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\aaverage\x12+\n" +
+	"\x03max\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x03max\x12\x18\n" +
+	"\asamples\x18\x04 \x01(\x04R\asamples\x12\x14\n" +
+	"\x05trend\x18\x05 \x01(\tR\x05trend\"\xc7\x03\n" +
+	"\vPiHoleState\x120\n" +
+	"\x06dns_v4\x18\x01 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x05dnsV4\x120\n" +
+	"\x06dns_v6\x18\x02 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x05dnsV6\x12/\n" +
+	"\x06status\x18\x03 \x01(\v2\x17.netmon.v1.PiHoleStatusR\x06status\x128\n" +
+	"\tupstreams\x18\x04 \x01(\v2\x1a.netmon.v1.PiHoleUpstreamsR\tupstreams\x122\n" +
+	"\agravity\x18\x05 \x01(\v2\x18.netmon.v1.PiHoleGravityR\agravity\x125\n" +
+	"\bcounters\x18\x06 \x01(\v2\x19.netmon.v1.PiHoleCountersR\bcounters\x12>\n" +
+	"\flatency_ipv4\x18\a \x01(\v2\x1b.netmon.v1.DnsLatencyWindowR\vlatencyIpv4\x12>\n" +
+	"\flatency_ipv6\x18\b \x01(\v2\x1b.netmon.v1.DnsLatencyWindowR\vlatencyIpv6\"\x9c\x02\n" +
 	"\x10GetStateResponse\x127\n" +
 	"\tinterface\x18\x01 \x01(\v2\x19.netmon.v1.InterfaceStateR\tinterface\x126\n" +
 	"\tlisteners\x18\x02 \x01(\v2\x18.netmon.v1.ListenerStateR\tlisteners\x124\n" +
 	"\bupstream\x18\x03 \x01(\v2\x18.netmon.v1.UpstreamStateR\bupstream\x121\n" +
-	"\aunbound\x18\x04 \x01(\v2\x17.netmon.v1.UnboundStateR\aunbound\"\x10\n" +
-	"\x0eGetInfoRequest\"\x9e\x03\n" +
+	"\aunbound\x18\x04 \x01(\v2\x17.netmon.v1.UnboundStateR\aunbound\x12.\n" +
+	"\x06pihole\x18\x05 \x01(\v2\x16.netmon.v1.PiHoleStateR\x06pihole\"\x10\n" +
+	"\x0eGetInfoRequest\"\xbf\x03\n" +
 	"\x0fGetInfoResponse\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12&\n" +
 	"\x0fstarted_at_unix\x18\x02 \x01(\x03R\rstartedAtUnix\x12+\n" +
@@ -2675,7 +3199,9 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\n" +
 	"build_time\x18\n" +
 	" \x01(\tR\tbuildTime\x12!\n" +
-	"\funbound_poll\x18\v \x01(\tR\vunboundPoll\"\x11\n" +
+	"\funbound_poll\x18\v \x01(\tR\vunboundPoll\x12\x1f\n" +
+	"\vpihole_poll\x18\f \x01(\tR\n" +
+	"piholePoll\"\x11\n" +
 	"\x0fGetStatsRequest\"[\n" +
 	"\x0fOutcomeCounters\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x04R\x05total\x12\x18\n" +
@@ -2748,14 +3274,15 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\vSEVERITY_OK\x10\x01\x12\x11\n" +
 	"\rSEVERITY_INFO\x10\x02\x12\x11\n" +
 	"\rSEVERITY_WARN\x10\x03\x12\x11\n" +
-	"\rSEVERITY_CRIT\x10\x04*\xb5\x01\n" +
+	"\rSEVERITY_CRIT\x10\x04*\xcf\x01\n" +
 	"\fRefreshScope\x12\x1d\n" +
 	"\x19REFRESH_SCOPE_UNSPECIFIED\x10\x00\x12\x15\n" +
 	"\x11REFRESH_SCOPE_ALL\x10\x01\x12\x1b\n" +
 	"\x17REFRESH_SCOPE_INTERFACE\x10\x02\x12\x1b\n" +
 	"\x17REFRESH_SCOPE_LISTENERS\x10\x03\x12\x1a\n" +
 	"\x16REFRESH_SCOPE_UPSTREAM\x10\x04\x12\x19\n" +
-	"\x15REFRESH_SCOPE_UNBOUND\x10\x05*\xe8\x01\n" +
+	"\x15REFRESH_SCOPE_UNBOUND\x10\x05\x12\x18\n" +
+	"\x14REFRESH_SCOPE_PIHOLE\x10\x06*\xe8\x01\n" +
 	"\rTaskEventKind\x12\x1f\n" +
 	"\x1bTASK_EVENT_KIND_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19TASK_EVENT_KIND_SCHEDULED\x10\x01\x12\x1f\n" +
@@ -2790,7 +3317,7 @@ func file_netmon_v1_netmon_proto_rawDescGZIP() []byte {
 }
 
 var file_netmon_v1_netmon_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_netmon_v1_netmon_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_netmon_v1_netmon_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_netmon_v1_netmon_proto_goTypes = []any{
 	(Severity)(0),                           // 0: netmon.v1.Severity
 	(RefreshScope)(0),                       // 1: netmon.v1.RefreshScope
@@ -2816,53 +3343,59 @@ var file_netmon_v1_netmon_proto_goTypes = []any{
 	(*DnssecProbeResult)(nil),               // 21: netmon.v1.DnssecProbeResult
 	(*UpstreamState)(nil),                   // 22: netmon.v1.UpstreamState
 	(*UnboundState)(nil),                    // 23: netmon.v1.UnboundState
-	(*GetStateResponse)(nil),                // 24: netmon.v1.GetStateResponse
-	(*GetInfoRequest)(nil),                  // 25: netmon.v1.GetInfoRequest
-	(*GetInfoResponse)(nil),                 // 26: netmon.v1.GetInfoResponse
-	(*GetStatsRequest)(nil),                 // 27: netmon.v1.GetStatsRequest
-	(*OutcomeCounters)(nil),                 // 28: netmon.v1.OutcomeCounters
-	(*EventCounters)(nil),                   // 29: netmon.v1.EventCounters
-	(*CollectorCounters)(nil),               // 30: netmon.v1.CollectorCounters
-	(*TaskCounters)(nil),                    // 31: netmon.v1.TaskCounters
-	(*CheckCounters)(nil),                   // 32: netmon.v1.CheckCounters
-	(*NotificationCounters)(nil),            // 33: netmon.v1.NotificationCounters
-	(*TraceCounters)(nil),                   // 34: netmon.v1.TraceCounters
-	(*GetStatsResponse)(nil),                // 35: netmon.v1.GetStatsResponse
-	(*RefreshRequest)(nil),                  // 36: netmon.v1.RefreshRequest
-	(*RefreshResponse)(nil),                 // 37: netmon.v1.RefreshResponse
-	(*SetRuntimeStatsIntervalRequest)(nil),  // 38: netmon.v1.SetRuntimeStatsIntervalRequest
-	(*SetRuntimeStatsIntervalResponse)(nil), // 39: netmon.v1.SetRuntimeStatsIntervalResponse
-	(*SetDebugRequest)(nil),                 // 40: netmon.v1.SetDebugRequest
-	(*SetDebugResponse)(nil),                // 41: netmon.v1.SetDebugResponse
-	nil,                                     // 42: netmon.v1.TraceEvent.FieldsEntry
-	nil,                                     // 43: netmon.v1.GetStatsResponse.CollectorsEntry
-	nil,                                     // 44: netmon.v1.GetStatsResponse.CollectorRunsEntry
-	nil,                                     // 45: netmon.v1.GetStatsResponse.TasksByIdEntry
-	nil,                                     // 46: netmon.v1.GetStatsResponse.ProbesEntry
-	(*timestamppb.Timestamp)(nil),           // 47: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),             // 48: google.protobuf.Duration
+	(*PiHoleStatus)(nil),                    // 24: netmon.v1.PiHoleStatus
+	(*PiHoleUpstreams)(nil),                 // 25: netmon.v1.PiHoleUpstreams
+	(*PiHoleGravity)(nil),                   // 26: netmon.v1.PiHoleGravity
+	(*PiHoleCounters)(nil),                  // 27: netmon.v1.PiHoleCounters
+	(*DnsLatencyWindow)(nil),                // 28: netmon.v1.DnsLatencyWindow
+	(*PiHoleState)(nil),                     // 29: netmon.v1.PiHoleState
+	(*GetStateResponse)(nil),                // 30: netmon.v1.GetStateResponse
+	(*GetInfoRequest)(nil),                  // 31: netmon.v1.GetInfoRequest
+	(*GetInfoResponse)(nil),                 // 32: netmon.v1.GetInfoResponse
+	(*GetStatsRequest)(nil),                 // 33: netmon.v1.GetStatsRequest
+	(*OutcomeCounters)(nil),                 // 34: netmon.v1.OutcomeCounters
+	(*EventCounters)(nil),                   // 35: netmon.v1.EventCounters
+	(*CollectorCounters)(nil),               // 36: netmon.v1.CollectorCounters
+	(*TaskCounters)(nil),                    // 37: netmon.v1.TaskCounters
+	(*CheckCounters)(nil),                   // 38: netmon.v1.CheckCounters
+	(*NotificationCounters)(nil),            // 39: netmon.v1.NotificationCounters
+	(*TraceCounters)(nil),                   // 40: netmon.v1.TraceCounters
+	(*GetStatsResponse)(nil),                // 41: netmon.v1.GetStatsResponse
+	(*RefreshRequest)(nil),                  // 42: netmon.v1.RefreshRequest
+	(*RefreshResponse)(nil),                 // 43: netmon.v1.RefreshResponse
+	(*SetRuntimeStatsIntervalRequest)(nil),  // 44: netmon.v1.SetRuntimeStatsIntervalRequest
+	(*SetRuntimeStatsIntervalResponse)(nil), // 45: netmon.v1.SetRuntimeStatsIntervalResponse
+	(*SetDebugRequest)(nil),                 // 46: netmon.v1.SetDebugRequest
+	(*SetDebugResponse)(nil),                // 47: netmon.v1.SetDebugResponse
+	nil,                                     // 48: netmon.v1.TraceEvent.FieldsEntry
+	nil,                                     // 49: netmon.v1.GetStatsResponse.CollectorsEntry
+	nil,                                     // 50: netmon.v1.GetStatsResponse.CollectorRunsEntry
+	nil,                                     // 51: netmon.v1.GetStatsResponse.TasksByIdEntry
+	nil,                                     // 52: netmon.v1.GetStatsResponse.ProbesEntry
+	(*timestamppb.Timestamp)(nil),           // 53: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),             // 54: google.protobuf.Duration
 }
 var file_netmon_v1_netmon_proto_depIdxs = []int32{
 	0,  // 0: netmon.v1.Check.severity:type_name -> netmon.v1.Severity
 	0,  // 1: netmon.v1.GetStatusResponse.overall_severity:type_name -> netmon.v1.Severity
 	3,  // 2: netmon.v1.GetStatusResponse.checks:type_name -> netmon.v1.Check
 	5,  // 3: netmon.v1.WatchStatusResponse.status:type_name -> netmon.v1.GetStatusResponse
-	47, // 4: netmon.v1.TaskEvent.at:type_name -> google.protobuf.Timestamp
+	53, // 4: netmon.v1.TaskEvent.at:type_name -> google.protobuf.Timestamp
 	2,  // 5: netmon.v1.TaskEvent.kind:type_name -> netmon.v1.TaskEventKind
-	48, // 6: netmon.v1.TaskEvent.delay:type_name -> google.protobuf.Duration
-	48, // 7: netmon.v1.TaskEvent.duration:type_name -> google.protobuf.Duration
+	54, // 6: netmon.v1.TaskEvent.delay:type_name -> google.protobuf.Duration
+	54, // 7: netmon.v1.TaskEvent.duration:type_name -> google.protobuf.Duration
 	9,  // 8: netmon.v1.WatchTasksResponse.event:type_name -> netmon.v1.TaskEvent
 	1,  // 9: netmon.v1.TraceRequest.scope:type_name -> netmon.v1.RefreshScope
-	47, // 10: netmon.v1.TraceEvent.at:type_name -> google.protobuf.Timestamp
-	42, // 11: netmon.v1.TraceEvent.fields:type_name -> netmon.v1.TraceEvent.FieldsEntry
+	53, // 10: netmon.v1.TraceEvent.at:type_name -> google.protobuf.Timestamp
+	48, // 11: netmon.v1.TraceEvent.fields:type_name -> netmon.v1.TraceEvent.FieldsEntry
 	12, // 12: netmon.v1.TraceResponse.event:type_name -> netmon.v1.TraceEvent
 	16, // 13: netmon.v1.ListenerState.dns53_tcp:type_name -> netmon.v1.ListenerBinding
 	16, // 14: netmon.v1.ListenerState.dns53_udp:type_name -> netmon.v1.ListenerBinding
 	16, // 15: netmon.v1.ListenerState.resolver5335_tcp:type_name -> netmon.v1.ListenerBinding
 	16, // 16: netmon.v1.ListenerState.resolver5335_udp:type_name -> netmon.v1.ListenerBinding
-	48, // 17: netmon.v1.DnsProbeResult.latency:type_name -> google.protobuf.Duration
-	48, // 18: netmon.v1.PublicIPObservation.latency:type_name -> google.protobuf.Duration
-	48, // 19: netmon.v1.DnssecProbeAttempt.latency:type_name -> google.protobuf.Duration
+	54, // 17: netmon.v1.DnsProbeResult.latency:type_name -> google.protobuf.Duration
+	54, // 18: netmon.v1.PublicIPObservation.latency:type_name -> google.protobuf.Duration
+	54, // 19: netmon.v1.DnssecProbeAttempt.latency:type_name -> google.protobuf.Duration
 	20, // 20: netmon.v1.DnssecProbeResult.positive:type_name -> netmon.v1.DnssecProbeAttempt
 	20, // 21: netmon.v1.DnssecProbeResult.negative:type_name -> netmon.v1.DnssecProbeAttempt
 	18, // 22: netmon.v1.UpstreamState.root_v4:type_name -> netmon.v1.DnsProbeResult
@@ -2872,50 +3405,63 @@ var file_netmon_v1_netmon_proto_depIdxs = []int32{
 	19, // 26: netmon.v1.UpstreamState.public_ipv4:type_name -> netmon.v1.PublicIPObservation
 	19, // 27: netmon.v1.UpstreamState.public_ipv6:type_name -> netmon.v1.PublicIPObservation
 	21, // 28: netmon.v1.UnboundState.dnssec:type_name -> netmon.v1.DnssecProbeResult
-	15, // 29: netmon.v1.GetStateResponse.interface:type_name -> netmon.v1.InterfaceState
-	17, // 30: netmon.v1.GetStateResponse.listeners:type_name -> netmon.v1.ListenerState
-	22, // 31: netmon.v1.GetStateResponse.upstream:type_name -> netmon.v1.UpstreamState
-	23, // 32: netmon.v1.GetStateResponse.unbound:type_name -> netmon.v1.UnboundState
-	29, // 33: netmon.v1.GetStatsResponse.events:type_name -> netmon.v1.EventCounters
-	43, // 34: netmon.v1.GetStatsResponse.collectors:type_name -> netmon.v1.GetStatsResponse.CollectorsEntry
-	44, // 35: netmon.v1.GetStatsResponse.collector_runs:type_name -> netmon.v1.GetStatsResponse.CollectorRunsEntry
-	31, // 36: netmon.v1.GetStatsResponse.tasks:type_name -> netmon.v1.TaskCounters
-	45, // 37: netmon.v1.GetStatsResponse.tasks_by_id:type_name -> netmon.v1.GetStatsResponse.TasksByIdEntry
-	46, // 38: netmon.v1.GetStatsResponse.probes:type_name -> netmon.v1.GetStatsResponse.ProbesEntry
-	32, // 39: netmon.v1.GetStatsResponse.checks:type_name -> netmon.v1.CheckCounters
-	33, // 40: netmon.v1.GetStatsResponse.notifications:type_name -> netmon.v1.NotificationCounters
-	34, // 41: netmon.v1.GetStatsResponse.traces:type_name -> netmon.v1.TraceCounters
-	1,  // 42: netmon.v1.RefreshRequest.scope:type_name -> netmon.v1.RefreshScope
-	48, // 43: netmon.v1.SetRuntimeStatsIntervalRequest.interval:type_name -> google.protobuf.Duration
-	48, // 44: netmon.v1.SetRuntimeStatsIntervalResponse.interval:type_name -> google.protobuf.Duration
-	30, // 45: netmon.v1.GetStatsResponse.CollectorsEntry.value:type_name -> netmon.v1.CollectorCounters
-	31, // 46: netmon.v1.GetStatsResponse.TasksByIdEntry.value:type_name -> netmon.v1.TaskCounters
-	28, // 47: netmon.v1.GetStatsResponse.ProbesEntry.value:type_name -> netmon.v1.OutcomeCounters
-	4,  // 48: netmon.v1.NetmonService.GetStatus:input_type -> netmon.v1.GetStatusRequest
-	6,  // 49: netmon.v1.NetmonService.WatchStatus:input_type -> netmon.v1.WatchStatusRequest
-	8,  // 50: netmon.v1.NetmonService.WatchTasks:input_type -> netmon.v1.WatchTasksRequest
-	11, // 51: netmon.v1.NetmonService.Trace:input_type -> netmon.v1.TraceRequest
-	14, // 52: netmon.v1.NetmonService.GetState:input_type -> netmon.v1.GetStateRequest
-	25, // 53: netmon.v1.NetmonService.GetInfo:input_type -> netmon.v1.GetInfoRequest
-	27, // 54: netmon.v1.NetmonService.GetStats:input_type -> netmon.v1.GetStatsRequest
-	36, // 55: netmon.v1.NetmonService.Refresh:input_type -> netmon.v1.RefreshRequest
-	40, // 56: netmon.v1.NetmonService.SetDebug:input_type -> netmon.v1.SetDebugRequest
-	38, // 57: netmon.v1.NetmonService.SetRuntimeStatsInterval:input_type -> netmon.v1.SetRuntimeStatsIntervalRequest
-	5,  // 58: netmon.v1.NetmonService.GetStatus:output_type -> netmon.v1.GetStatusResponse
-	7,  // 59: netmon.v1.NetmonService.WatchStatus:output_type -> netmon.v1.WatchStatusResponse
-	10, // 60: netmon.v1.NetmonService.WatchTasks:output_type -> netmon.v1.WatchTasksResponse
-	13, // 61: netmon.v1.NetmonService.Trace:output_type -> netmon.v1.TraceResponse
-	24, // 62: netmon.v1.NetmonService.GetState:output_type -> netmon.v1.GetStateResponse
-	26, // 63: netmon.v1.NetmonService.GetInfo:output_type -> netmon.v1.GetInfoResponse
-	35, // 64: netmon.v1.NetmonService.GetStats:output_type -> netmon.v1.GetStatsResponse
-	37, // 65: netmon.v1.NetmonService.Refresh:output_type -> netmon.v1.RefreshResponse
-	41, // 66: netmon.v1.NetmonService.SetDebug:output_type -> netmon.v1.SetDebugResponse
-	39, // 67: netmon.v1.NetmonService.SetRuntimeStatsInterval:output_type -> netmon.v1.SetRuntimeStatsIntervalResponse
-	58, // [58:68] is the sub-list for method output_type
-	48, // [48:58] is the sub-list for method input_type
-	48, // [48:48] is the sub-list for extension type_name
-	48, // [48:48] is the sub-list for extension extendee
-	0,  // [0:48] is the sub-list for field type_name
+	53, // 29: netmon.v1.PiHoleGravity.last_updated:type_name -> google.protobuf.Timestamp
+	54, // 30: netmon.v1.DnsLatencyWindow.last:type_name -> google.protobuf.Duration
+	54, // 31: netmon.v1.DnsLatencyWindow.average:type_name -> google.protobuf.Duration
+	54, // 32: netmon.v1.DnsLatencyWindow.max:type_name -> google.protobuf.Duration
+	18, // 33: netmon.v1.PiHoleState.dns_v4:type_name -> netmon.v1.DnsProbeResult
+	18, // 34: netmon.v1.PiHoleState.dns_v6:type_name -> netmon.v1.DnsProbeResult
+	24, // 35: netmon.v1.PiHoleState.status:type_name -> netmon.v1.PiHoleStatus
+	25, // 36: netmon.v1.PiHoleState.upstreams:type_name -> netmon.v1.PiHoleUpstreams
+	26, // 37: netmon.v1.PiHoleState.gravity:type_name -> netmon.v1.PiHoleGravity
+	27, // 38: netmon.v1.PiHoleState.counters:type_name -> netmon.v1.PiHoleCounters
+	28, // 39: netmon.v1.PiHoleState.latency_ipv4:type_name -> netmon.v1.DnsLatencyWindow
+	28, // 40: netmon.v1.PiHoleState.latency_ipv6:type_name -> netmon.v1.DnsLatencyWindow
+	15, // 41: netmon.v1.GetStateResponse.interface:type_name -> netmon.v1.InterfaceState
+	17, // 42: netmon.v1.GetStateResponse.listeners:type_name -> netmon.v1.ListenerState
+	22, // 43: netmon.v1.GetStateResponse.upstream:type_name -> netmon.v1.UpstreamState
+	23, // 44: netmon.v1.GetStateResponse.unbound:type_name -> netmon.v1.UnboundState
+	29, // 45: netmon.v1.GetStateResponse.pihole:type_name -> netmon.v1.PiHoleState
+	35, // 46: netmon.v1.GetStatsResponse.events:type_name -> netmon.v1.EventCounters
+	49, // 47: netmon.v1.GetStatsResponse.collectors:type_name -> netmon.v1.GetStatsResponse.CollectorsEntry
+	50, // 48: netmon.v1.GetStatsResponse.collector_runs:type_name -> netmon.v1.GetStatsResponse.CollectorRunsEntry
+	37, // 49: netmon.v1.GetStatsResponse.tasks:type_name -> netmon.v1.TaskCounters
+	51, // 50: netmon.v1.GetStatsResponse.tasks_by_id:type_name -> netmon.v1.GetStatsResponse.TasksByIdEntry
+	52, // 51: netmon.v1.GetStatsResponse.probes:type_name -> netmon.v1.GetStatsResponse.ProbesEntry
+	38, // 52: netmon.v1.GetStatsResponse.checks:type_name -> netmon.v1.CheckCounters
+	39, // 53: netmon.v1.GetStatsResponse.notifications:type_name -> netmon.v1.NotificationCounters
+	40, // 54: netmon.v1.GetStatsResponse.traces:type_name -> netmon.v1.TraceCounters
+	1,  // 55: netmon.v1.RefreshRequest.scope:type_name -> netmon.v1.RefreshScope
+	54, // 56: netmon.v1.SetRuntimeStatsIntervalRequest.interval:type_name -> google.protobuf.Duration
+	54, // 57: netmon.v1.SetRuntimeStatsIntervalResponse.interval:type_name -> google.protobuf.Duration
+	36, // 58: netmon.v1.GetStatsResponse.CollectorsEntry.value:type_name -> netmon.v1.CollectorCounters
+	37, // 59: netmon.v1.GetStatsResponse.TasksByIdEntry.value:type_name -> netmon.v1.TaskCounters
+	34, // 60: netmon.v1.GetStatsResponse.ProbesEntry.value:type_name -> netmon.v1.OutcomeCounters
+	4,  // 61: netmon.v1.NetmonService.GetStatus:input_type -> netmon.v1.GetStatusRequest
+	6,  // 62: netmon.v1.NetmonService.WatchStatus:input_type -> netmon.v1.WatchStatusRequest
+	8,  // 63: netmon.v1.NetmonService.WatchTasks:input_type -> netmon.v1.WatchTasksRequest
+	11, // 64: netmon.v1.NetmonService.Trace:input_type -> netmon.v1.TraceRequest
+	14, // 65: netmon.v1.NetmonService.GetState:input_type -> netmon.v1.GetStateRequest
+	31, // 66: netmon.v1.NetmonService.GetInfo:input_type -> netmon.v1.GetInfoRequest
+	33, // 67: netmon.v1.NetmonService.GetStats:input_type -> netmon.v1.GetStatsRequest
+	42, // 68: netmon.v1.NetmonService.Refresh:input_type -> netmon.v1.RefreshRequest
+	46, // 69: netmon.v1.NetmonService.SetDebug:input_type -> netmon.v1.SetDebugRequest
+	44, // 70: netmon.v1.NetmonService.SetRuntimeStatsInterval:input_type -> netmon.v1.SetRuntimeStatsIntervalRequest
+	5,  // 71: netmon.v1.NetmonService.GetStatus:output_type -> netmon.v1.GetStatusResponse
+	7,  // 72: netmon.v1.NetmonService.WatchStatus:output_type -> netmon.v1.WatchStatusResponse
+	10, // 73: netmon.v1.NetmonService.WatchTasks:output_type -> netmon.v1.WatchTasksResponse
+	13, // 74: netmon.v1.NetmonService.Trace:output_type -> netmon.v1.TraceResponse
+	30, // 75: netmon.v1.NetmonService.GetState:output_type -> netmon.v1.GetStateResponse
+	32, // 76: netmon.v1.NetmonService.GetInfo:output_type -> netmon.v1.GetInfoResponse
+	41, // 77: netmon.v1.NetmonService.GetStats:output_type -> netmon.v1.GetStatsResponse
+	43, // 78: netmon.v1.NetmonService.Refresh:output_type -> netmon.v1.RefreshResponse
+	47, // 79: netmon.v1.NetmonService.SetDebug:output_type -> netmon.v1.SetDebugResponse
+	45, // 80: netmon.v1.NetmonService.SetRuntimeStatsInterval:output_type -> netmon.v1.SetRuntimeStatsIntervalResponse
+	71, // [71:81] is the sub-list for method output_type
+	61, // [61:71] is the sub-list for method input_type
+	61, // [61:61] is the sub-list for extension type_name
+	61, // [61:61] is the sub-list for extension extendee
+	0,  // [0:61] is the sub-list for field type_name
 }
 
 func init() { file_netmon_v1_netmon_proto_init() }
@@ -2929,7 +3475,7 @@ func file_netmon_v1_netmon_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_netmon_v1_netmon_proto_rawDesc), len(file_netmon_v1_netmon_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   44,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
