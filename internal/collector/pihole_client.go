@@ -240,8 +240,10 @@ func (e piHoleAPIError) Error() string {
 }
 
 func isUnauthorizedError(err error) bool {
-	var apiErr piHoleAPIError
-	return errors.As(err, &apiErr) && apiErr.Code == http.StatusUnauthorized
+	if apiErr, ok := errors.AsType[piHoleAPIError](err); ok && apiErr.Code == http.StatusUnauthorized {
+		return true
+	}
+	return false
 }
 
 func decodePiHoleError(resp *http.Response) error {

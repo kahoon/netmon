@@ -255,8 +255,8 @@ func TestRefreshRejectsUnknownScope(t *testing.T) {
 		t.Fatal("Refresh() error = nil, want invalid argument error")
 	}
 
-	var connectErr *connect.Error
-	if !errors.As(err, &connectErr) {
+	connectErr, ok := errors.AsType[*connect.Error](err)
+	if !ok {
 		t.Fatalf("Refresh() error = %T, want *connect.Error", err)
 	}
 	if got, want := connectErr.Code(), connect.CodeInvalidArgument; got != want {

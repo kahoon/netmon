@@ -365,8 +365,7 @@ func classifyExchangeError(err error) model.DNSProbeStatus {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return model.DNSProbeStatusTimeout
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 		return model.DNSProbeStatusTimeout
 	}
 	return model.DNSProbeStatusNetworkError

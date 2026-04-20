@@ -138,8 +138,7 @@ func classifyDNSSECError(err error) model.DNSSECProbeStatus {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return model.DNSSECProbeStatusTimeout
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 		return model.DNSSECProbeStatusTimeout
 	}
 	return model.DNSSECProbeStatusNetworkError

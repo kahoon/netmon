@@ -95,6 +95,9 @@ func runWatch(spec commandSpec, args []string) {
 	case "status":
 		stream, err := cmd.client.WatchStatus(cmd.ctx, connect.NewRequest(&netmonv1.WatchStatusRequest{}))
 		if err != nil {
+			if isCanceledError(err) {
+				return
+			}
 			log.Fatal(err)
 		}
 		defer stream.Close()
@@ -108,6 +111,9 @@ func runWatch(spec commandSpec, args []string) {
 	case "tasks":
 		stream, err := cmd.client.WatchTasks(cmd.ctx, connect.NewRequest(&netmonv1.WatchTasksRequest{}))
 		if err != nil {
+			if isCanceledError(err) {
+				return
+			}
 			log.Fatal(err)
 		}
 		defer stream.Close()
@@ -121,6 +127,9 @@ func runWatch(spec commandSpec, args []string) {
 	case "checks":
 		stream, err := cmd.client.WatchChecks(cmd.ctx, connect.NewRequest(&netmonv1.WatchChecksRequest{}))
 		if err != nil {
+			if isCanceledError(err) {
+				return
+			}
 			log.Fatal(err)
 		}
 		defer stream.Close()
@@ -886,9 +895,5 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 func isCanceledError(err error) bool {
-	if errors.Is(err, context.Canceled) {
-		return true
-	}
-	var connectErr *connect.Error
-	return errors.As(err, &connectErr) && connectErr.Code() == connect.CodeCanceled
+	return errors.Is(err, context.Canceled) || connect.CodeOf(err) == connect.CodeCanceled
 }
