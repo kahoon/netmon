@@ -87,6 +87,30 @@ func (h *Handler) WatchTasks(ctx context.Context, _ *connect.Request[netmonv1.Wa
 	}
 }
 
+func (h *Handler) WatchChecks(ctx context.Context, _ *connect.Request[netmonv1.WatchChecksRequest], stream *connect.ServerStream[netmonv1.WatchChecksResponse]) error {
+	sub, err := h.svc.WatchChecks(ctx)
+	if err != nil {
+		return err
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case event, ok := <-sub.Updates():
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(&netmonv1.WatchChecksResponse{
+				Event: mapCheckEvent(event),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+}
+
 func (h *Handler) Trace(ctx context.Context, req *connect.Request[netmonv1.TraceRequest], stream *connect.ServerStream[netmonv1.TraceResponse]) error {
 	scope, err := mapRefreshScope(req.Msg.GetScope())
 	if err != nil {
@@ -264,6 +288,23 @@ func mapTaskEvent(event monitor.TaskEvent) *netmonv1.TaskEvent {
 	}
 	if event.Duration != 0 {
 		out.Duration = durationpb.New(event.Duration)
+	}
+	return out
+}
+
+func mapCheckEvent(event monitor.CheckEvent) *netmonv1.CheckEvent {
+	out := &netmonv1.CheckEvent{
+		Key:              event.Key,
+		Label:            event.Label,
+		PreviousSeverity: mapSeverity(event.PreviousSeverity),
+		PreviousSummary:  event.PreviousSummary,
+		PreviousDetail:   event.PreviousDetail,
+		CurrentSeverity:  mapSeverity(event.CurrentSeverity),
+		CurrentSummary:   event.CurrentSummary,
+		CurrentDetail:    event.CurrentDetail,
+	}
+	if !event.At.IsZero() {
+		out.At = timestamppb.New(event.At)
 	}
 	return out
 }

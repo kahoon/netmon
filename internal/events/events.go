@@ -141,6 +141,20 @@ func (e ChecksEvaluated) OccurredAt() time.Time {
 	return e.At
 }
 
+type CheckChanged struct {
+	At       time.Time
+	Key      string
+	Label    string
+	Previous model.CheckResult
+	Current  model.CheckResult
+}
+
+func (CheckChanged) event() {}
+
+func (e CheckChanged) OccurredAt() time.Time {
+	return e.At
+}
+
 type NotificationSent struct {
 	At       time.Time
 	Title    string

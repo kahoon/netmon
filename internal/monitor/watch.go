@@ -38,6 +38,23 @@ type TaskSubscription interface {
 	Close()
 }
 
+type CheckEvent struct {
+	At               time.Time
+	Key              string
+	Label            string
+	PreviousSeverity model.Severity
+	PreviousSummary  string
+	PreviousDetail   string
+	CurrentSeverity  model.Severity
+	CurrentSummary   string
+	CurrentDetail    string
+}
+
+type CheckSubscription interface {
+	Updates() <-chan CheckEvent
+	Close()
+}
+
 func statusViewFromSnapshot(state model.SystemState, checks model.CheckSet) StatusView {
 	return StatusView{
 		OverallSeverity: model.CurrentHealthSeverity(checks),
@@ -83,6 +100,13 @@ type statusSubscription struct {
 	once    sync.Once
 }
 
+type checkSubscription struct {
+	updates chan CheckEvent
+	done    chan struct{}
+	close   func()
+	once    sync.Once
+}
+
 func (s *statusSubscription) Updates() <-chan StatusView {
 	return s.updates
 }
@@ -101,6 +125,19 @@ func (s *taskSubscription) Updates() <-chan TaskEvent {
 }
 
 func (s *taskSubscription) Close() {
+	s.once.Do(func() {
+		close(s.done)
+		if s.close != nil {
+			s.close()
+		}
+	})
+}
+
+func (s *checkSubscription) Updates() <-chan CheckEvent {
+	return s.updates
+}
+
+func (s *checkSubscription) Close() {
 	s.once.Do(func() {
 		close(s.done)
 		if s.close != nil {
@@ -181,6 +218,42 @@ func newStatusSubscription(sub *events.Subscription) StatusSubscription {
 	return out
 }
 
+func newCheckSubscription(sub *events.Subscription) CheckSubscription {
+	out := &checkSubscription{
+		updates: make(chan CheckEvent, 64),
+		done:    make(chan struct{}),
+		close:   sub.Close,
+	}
+
+	go func() {
+		defer close(out.updates)
+
+		for {
+			select {
+			case <-out.done:
+				return
+			case event, ok := <-sub.Events():
+				if !ok {
+					return
+				}
+
+				check, ok := checkEventFromDomain(event)
+				if !ok {
+					continue
+				}
+
+				select {
+				case out.updates <- check:
+				case <-out.done:
+					return
+				}
+			}
+		}
+	}()
+
+	return out
+}
+
 func statusEventsOnly(event events.Event) bool {
 	_, ok := event.(events.StatusChanged)
 	return ok
@@ -247,5 +320,29 @@ func taskEventFromDomain(event events.Event) (TaskEvent, bool) {
 		}, true
 	default:
 		return TaskEvent{}, false
+	}
+}
+
+func checksEventsOnly(event events.Event) bool {
+	_, ok := event.(events.CheckChanged)
+	return ok
+}
+
+func checkEventFromDomain(event events.Event) (CheckEvent, bool) {
+	switch e := event.(type) {
+	case events.CheckChanged:
+		return CheckEvent{
+			At:               e.At,
+			Key:              e.Key,
+			Label:            e.Label,
+			PreviousSeverity: e.Previous.Severity,
+			PreviousSummary:  e.Previous.Summary,
+			PreviousDetail:   e.Previous.Detail,
+			CurrentSeverity:  e.Current.Severity,
+			CurrentSummary:   e.Current.Summary,
+			CurrentDetail:    e.Current.Detail,
+		}, true
+	default:
+		return CheckEvent{}, false
 	}
 }

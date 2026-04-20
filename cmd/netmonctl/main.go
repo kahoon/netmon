@@ -118,6 +118,19 @@ func runWatch(spec commandSpec, args []string) {
 		if err := stream.Err(); err != nil && !isCanceledError(err) {
 			log.Fatal(err)
 		}
+	case "checks":
+		stream, err := cmd.client.WatchChecks(cmd.ctx, connect.NewRequest(&netmonv1.WatchChecksRequest{}))
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer stream.Close()
+
+		for stream.Receive() {
+			printCheckEvent(stream.Msg().GetEvent())
+		}
+		if err := stream.Err(); err != nil && !isCanceledError(err) {
+			log.Fatal(err)
+		}
 	default:
 		log.Fatalf("unknown watch subject %q", subject)
 	}
@@ -624,6 +637,31 @@ func printTaskEvent(event *netmonv1.TaskEvent) {
 		line += fmt.Sprintf(" error=%s", detail)
 	}
 	fmt.Println(line)
+}
+
+func printCheckEvent(event *netmonv1.CheckEvent) {
+	if event == nil {
+		return
+	}
+
+	timestamp := time.Now().Local()
+	if at := event.GetAt(); at != nil {
+		timestamp = at.AsTime().Local()
+	}
+
+	label := defaultString(event.GetLabel(), event.GetKey())
+	line := fmt.Sprintf(
+		"[%s] %-20s %s -> %s  %s",
+		timestamp.Format(time.RFC3339),
+		defaultString(event.GetKey(), label),
+		formatSeverity(event.GetPreviousSeverity()),
+		formatSeverity(event.GetCurrentSeverity()),
+		defaultString(event.GetCurrentSummary(), "healthy"),
+	)
+	fmt.Println(line)
+	if detail := event.GetCurrentDetail(); detail != "" {
+		fmt.Printf("  %s\n", detail)
+	}
 }
 
 func printTraceEvent(event *netmonv1.TraceEvent, noTraceID bool) {

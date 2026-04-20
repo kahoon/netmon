@@ -11,6 +11,7 @@ service NetmonService {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
   rpc WatchStatus(WatchStatusRequest) returns (stream WatchStatusResponse);
   rpc WatchTasks(WatchTasksRequest) returns (stream WatchTasksResponse);
+  rpc WatchChecks(WatchChecksRequest) returns (stream WatchChecksResponse);
   rpc Trace(TraceRequest) returns (stream TraceResponse);
   rpc GetState(GetStateRequest) returns (GetStateResponse);
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
@@ -84,6 +85,24 @@ message TaskEvent {
 
 message WatchTasksResponse {
   TaskEvent event = 1;
+}
+
+message WatchChecksRequest {}
+
+message CheckEvent {
+  google.protobuf.Timestamp at = 1;
+  string key = 2;
+  string label = 3;
+  Severity previous_severity = 4;
+  string previous_summary = 5;
+  string previous_detail = 6;
+  Severity current_severity = 7;
+  string current_summary = 8;
+  string current_detail = 9;
+}
+
+message WatchChecksResponse {
+  CheckEvent event = 1;
 }
 
 message TraceRequest {

@@ -68,6 +68,12 @@ func NewMonitor(cfg config.Config) *Monitor {
 				Buffer:  64,
 				History: 64,
 			},
+			events.FeedConfig{
+				Name:    "checks",
+				Filter:  checksEventsOnly,
+				Buffer:  64,
+				History: 64,
+			},
 		),
 		stats: recorder,
 	}
@@ -233,6 +239,22 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 		})
 	}
 
+	changedAt := time.Now().Local()
+	for _, key := range model.CheckOrder() {
+		prev := previousChecks[key]
+		curr := nextChecks[key]
+		if prev.Equal(curr) {
+			continue
+		}
+		m.bus.Emit(events.CheckChanged{
+			At:       changedAt,
+			Key:      key,
+			Label:    curr.Label,
+			Previous: prev,
+			Current:  curr,
+		})
+	}
+
 	changed := changedCheckCount(previousChecks, nextChecks)
 	passed, failed := checkOutcomeCounts(nextChecks)
 	events.Emit(ctx, events.ChecksEvaluated{
@@ -300,6 +322,11 @@ func (m *Monitor) subscribeStatus() StatusSubscription {
 func (m *Monitor) subscribeTasks() TaskSubscription {
 	sub := m.bus.Subscribe("tasks")
 	return newTaskSubscription(sub)
+}
+
+func (m *Monitor) subscribeChecks() CheckSubscription {
+	sub := m.bus.Subscribe("checks")
+	return newCheckSubscription(sub)
 }
 
 func changedCheckCount(previous, current model.CheckSet) int {

@@ -19,6 +19,7 @@ type fakeService struct {
 	status        monitor.StatusView
 	watchSub      monitor.StatusSubscription
 	taskSub       monitor.TaskSubscription
+	checkSub      monitor.CheckSubscription
 	state         model.SystemState
 	info          monitor.Info
 	snapshot      stats.Snapshot
@@ -41,6 +42,12 @@ func (f *fakeService) WatchTasks(context.Context) (monitor.TaskSubscription, err
 		return f.taskSub, nil
 	}
 	return &fakeTaskSubscription{updates: make(chan monitor.TaskEvent)}, nil
+}
+func (f *fakeService) WatchChecks(context.Context) (monitor.CheckSubscription, error) {
+	if f.checkSub != nil {
+		return f.checkSub, nil
+	}
+	return &fakeCheckSubscription{updates: make(chan monitor.CheckEvent)}, nil
 }
 func (f *fakeService) GetState(context.Context) (model.SystemState, error) { return f.state, nil }
 func (f *fakeService) GetInfo(context.Context) (monitor.Info, error)       { return f.info, nil }
@@ -74,6 +81,13 @@ type fakeTaskSubscription struct {
 
 func (f *fakeTaskSubscription) Updates() <-chan monitor.TaskEvent { return f.updates }
 func (f *fakeTaskSubscription) Close()                            {}
+
+type fakeCheckSubscription struct {
+	updates <-chan monitor.CheckEvent
+}
+
+func (f *fakeCheckSubscription) Updates() <-chan monitor.CheckEvent { return f.updates }
+func (f *fakeCheckSubscription) Close()                             {}
 
 func TestGetStatusMapsOKSeverity(t *testing.T) {
 	handler := &Handler{
@@ -247,6 +261,27 @@ func TestRefreshRejectsUnknownScope(t *testing.T) {
 	}
 	if got, want := connectErr.Code(), connect.CodeInvalidArgument; got != want {
 		t.Fatalf("Refresh() code = %s, want %s", got, want)
+	}
+}
+
+func TestMapCheckEvent(t *testing.T) {
+	event := monitor.CheckEvent{
+		At:               time.Unix(1_700_000_000, 0).Local(),
+		Key:              "interface-oper",
+		Label:            "interface operational",
+		PreviousSeverity: model.SeverityOK,
+		CurrentSeverity:  model.SeverityCrit,
+		CurrentSummary:   "interface eno1 operstate down",
+	}
+	got := mapCheckEvent(event)
+	if got.GetKey() != "interface-oper" {
+		t.Fatalf("Event.Key = %q, want %q", got.GetKey(), "interface-oper")
+	}
+	if got.GetPreviousSeverity() != netmonv1.Severity_SEVERITY_OK {
+		t.Fatalf("Event.PreviousSeverity = %s, want %s", got.GetPreviousSeverity(), netmonv1.Severity_SEVERITY_OK)
+	}
+	if got.GetCurrentSeverity() != netmonv1.Severity_SEVERITY_CRIT {
+		t.Fatalf("Event.CurrentSeverity = %s, want %s", got.GetCurrentSeverity(), netmonv1.Severity_SEVERITY_CRIT)
 	}
 }
 

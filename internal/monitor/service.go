@@ -46,6 +46,7 @@ type Service interface {
 	GetStatus(ctx context.Context) (StatusView, error)
 	WatchStatus(ctx context.Context) (StatusSubscription, error)
 	WatchTasks(ctx context.Context) (TaskSubscription, error)
+	WatchChecks(ctx context.Context) (CheckSubscription, error)
 	GetState(ctx context.Context) (model.SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
 	GetStats(ctx context.Context) (stats.Snapshot, error)
@@ -70,6 +71,10 @@ func (m *Monitor) WatchStatus(_ context.Context) (StatusSubscription, error) {
 
 func (m *Monitor) WatchTasks(_ context.Context) (TaskSubscription, error) {
 	return m.subscribeTasks(), nil
+}
+
+func (m *Monitor) WatchChecks(_ context.Context) (CheckSubscription, error) {
+	return m.subscribeChecks(), nil
 }
 
 func (m *Monitor) GetState(_ context.Context) (model.SystemState, error) {

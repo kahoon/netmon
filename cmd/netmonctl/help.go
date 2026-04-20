@@ -42,20 +42,22 @@ Examples:
 	},
 	"watch": {
 		name:    "watch",
-		summary: "Stream live status or task updates from the running daemon.",
+		summary: "Stream live status, check, or task updates from the running daemon.",
 		help: `Stream live updates from the running daemon.
 
 Subjects:
   status   Print the current health view immediately, then stream changes.
   tasks    Stream pending task telemetry events from the running daemon.
+  checks   Stream recent and live individual check transitions.
 
 Usage:
-  netmonctl watch [status|tasks] [-socket path]
+  netmonctl watch [status|tasks|checks] [-socket path]
 
 Examples:
   netmonctl watch
   netmonctl watch status
   netmonctl watch tasks
+  netmonctl watch checks
 `,
 		run: runWatch,
 	},
@@ -242,6 +244,7 @@ func writeUsage(w io.Writer) {
 	fmt.Fprintln(w, "  netmonctl status")
 	fmt.Fprintln(w, "  netmonctl watch")
 	fmt.Fprintln(w, "  netmonctl watch tasks")
+	fmt.Fprintln(w, "  netmonctl watch checks")
 	fmt.Fprintln(w, "  netmonctl checks -all")
 	fmt.Fprintln(w, "  netmonctl state -json")
 	fmt.Fprintln(w, "  netmonctl stats")

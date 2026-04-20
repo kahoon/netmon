@@ -306,3 +306,34 @@ func TestWatchTasksSeedsRecentHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestWatchChecksSeedsRecentHistory(t *testing.T) {
+	daemon := NewMonitor(config.Config{})
+	daemon.state = model.SystemState{}
+	daemon.checks = model.EvaluateChecks("", daemon.state)
+
+	daemon.applyUpdate(context.Background(), "test change", func(current *model.SystemState) {
+		current.Interface = model.InterfaceState{IfName: "eno1", OperState: "down"}
+	})
+
+	sub, err := daemon.WatchChecks(context.Background())
+	if err != nil {
+		t.Fatalf("WatchChecks() error = %v", err)
+	}
+	defer sub.Close()
+
+	select {
+	case event := <-sub.Updates():
+		if got, want := event.Key, "interface-oper"; got != want {
+			t.Fatalf("event Key = %q, want %q", got, want)
+		}
+		if got, want := event.PreviousSeverity, model.SeverityOK; got != want {
+			t.Fatalf("event PreviousSeverity = %s, want %s", got, want)
+		}
+		if got, want := event.CurrentSeverity, model.SeverityCrit; got != want {
+			t.Fatalf("event CurrentSeverity = %s, want %s", got, want)
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for check event")
+	}
+}

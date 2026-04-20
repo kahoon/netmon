@@ -208,6 +208,7 @@ netmonctl status
 netmonctl trace
 netmonctl watch
 netmonctl watch tasks
+netmonctl watch checks
 netmonctl checks
 netmonctl checks --all
 netmonctl state
@@ -267,6 +268,7 @@ Example output:
 
 - `netmonctl watch`
 - `netmonctl watch tasks`
+- `netmonctl watch checks`
 
 They serve different purposes.
 
@@ -354,16 +356,42 @@ fired, or whether a task was replaced, you can watch the scheduler make those
 decisions live, and you can still see the most recent task activity even if
 you connect a few moments late.
 
+### `watch checks`: recent and live check transitions
+
+`netmonctl watch checks` sits between the high-level `watch` stream and the
+lower-level task/trace surfaces.
+
+It replays the most recent individual check transitions, then stays attached for
+future ones. Each event shows one check moving from its previous severity to its
+new severity, along with the current summary and detail when present.
+
+This is useful when you want to answer:
+
+- which specific check changed
+- whether a condition degraded or recovered
+- what the newest non-OK summary/detail is
+
+Example:
+
+```text
+[2026-04-20T20:14:03-04:00] external-dns-v6     OK -> WARN  external DNS over IPv6 degraded
+  root: ok; recursive: timeout
+[2026-04-20T20:14:11-04:00] pihole-dns-v6       OK -> CRIT  Pi-hole DNS over IPv6 failing
+  timeout
+```
+
 ### Why the two streams are separate
 
-The split between `watch` and `watch tasks` is deliberate.
+The split between `watch`, `watch checks`, and `watch tasks` is deliberate.
 
 - `watch` is for the appliance operator
+- `watch checks` is for understanding health transitions at the check level
 - `watch tasks` is for debugging, development, and understanding the scheduler
 
 Keeping them separate avoids mixing user-facing health state with internal
 activity. The first stream tells you what the appliance believes. The second
-stream tells you how the daemon got there.
+tells you how individual checks moved. The third tells you how the daemon got
+there.
 
 ### Implementation notes
 
