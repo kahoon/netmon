@@ -84,6 +84,14 @@ func TestGetStateReturnsCopy(t *testing.T) {
 		Interface: model.InterfaceState{
 			ULA: []string{"fd00::1"},
 		},
+		Unbound: model.UnboundState{
+			DNSSEC: model.DNSSECProbeResult{
+				Positive: model.DNSSECProbeAttempt{
+					Name:   "internetsociety.org.",
+					Status: model.DNSSECProbeStatusOK,
+				},
+			},
+		},
 	}
 
 	state, err := daemon.GetState(context.Background())
@@ -92,9 +100,13 @@ func TestGetStateReturnsCopy(t *testing.T) {
 	}
 
 	state.Interface.ULA[0] = "fd00::2"
+	state.Unbound.DNSSEC.Positive.Name = "changed"
 
 	if got, want := daemon.state.Interface.ULA[0], "fd00::1"; got != want {
 		t.Fatalf("monitor state mutated through GetState() copy: got %q want %q", got, want)
+	}
+	if got, want := daemon.state.Unbound.DNSSEC.Positive.Name, "internetsociety.org."; got != want {
+		t.Fatalf("monitor unbound state mutated through GetState() copy: got %q want %q", got, want)
 	}
 }
 
@@ -104,6 +116,7 @@ func TestGetInfoIncludesBuildAndRuntimeMetadata(t *testing.T) {
 		InterfacePollInterval: 10 * time.Minute,
 		ListenerPollInterval:  10 * time.Minute,
 		UpstreamPollInterval:  5 * time.Minute,
+		UnboundPollInterval:   5 * time.Minute,
 		RuntimeStatsInterval:  24 * time.Hour,
 		NtfyHost:              "ntfy.sh",
 	}
@@ -122,6 +135,9 @@ func TestGetInfoIncludesBuildAndRuntimeMetadata(t *testing.T) {
 	}
 	if got, want := info.NtfyHost, "ntfy.sh"; got != want {
 		t.Fatalf("GetInfo().NtfyHost = %q, want %q", got, want)
+	}
+	if got, want := info.UnboundPoll, 5*time.Minute; got != want {
+		t.Fatalf("GetInfo().UnboundPoll = %s, want %s", got, want)
 	}
 }
 

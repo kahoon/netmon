@@ -123,6 +123,7 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 				InterfacePoll:        10 * time.Minute,
 				ListenerPoll:         10 * time.Minute,
 				UpstreamPoll:         5 * time.Minute,
+				UnboundPoll:          5 * time.Minute,
 				RuntimeStatsInterval: 24 * time.Hour,
 				NtfyHost:             "ntfy.sh",
 			},
@@ -142,6 +143,50 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 	}
 	if got, want := resp.Msg.GetStartedAtUnix(), startedAt.Unix(); got != want {
 		t.Fatalf("GetInfo().StartedAtUnix = %d, want %d", got, want)
+	}
+	if got, want := resp.Msg.GetUnboundPoll(), "5m0s"; got != want {
+		t.Fatalf("GetInfo().UnboundPoll = %q, want %q", got, want)
+	}
+}
+
+func TestGetStateMapsUnboundState(t *testing.T) {
+	handler := &Handler{
+		svc: &fakeService{
+			state: model.SystemState{
+				Unbound: model.UnboundState{
+					DNSSEC: model.DNSSECProbeResult{
+						Positive: model.DNSSECProbeAttempt{
+							Name:   "internetsociety.org.",
+							Target: "127.0.0.1:5335",
+							Status: model.DNSSECProbeStatusOK,
+							Rcode:  "NOERROR",
+							AD:     true,
+						},
+						Negative: model.DNSSECProbeAttempt{
+							Name:   "dnssec-failed.org.",
+							Target: "127.0.0.1:5335",
+							Status: model.DNSSECProbeStatusOK,
+							Rcode:  "SERVFAIL",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	resp, err := handler.GetState(context.Background(), connect.NewRequest(&netmonv1.GetStateRequest{}))
+	if err != nil {
+		t.Fatalf("GetState() error = %v", err)
+	}
+
+	if got, want := resp.Msg.GetUnbound().GetDnssec().GetPositive().GetName(), "internetsociety.org."; got != want {
+		t.Fatalf("GetState().Unbound.Dnssec.Positive.Name = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetUnbound().GetDnssec().GetPositive().GetAd(), true; got != want {
+		t.Fatalf("GetState().Unbound.Dnssec.Positive.Ad = %t, want %t", got, want)
+	}
+	if got, want := resp.Msg.GetUnbound().GetDnssec().GetNegative().GetRcode(), "SERVFAIL"; got != want {
+		t.Fatalf("GetState().Unbound.Dnssec.Negative.Rcode = %q, want %q", got, want)
 	}
 }
 

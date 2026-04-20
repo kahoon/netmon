@@ -3,9 +3,10 @@
 `netmon` is a small Linux network monitor for a DNS appliance host.
 
 It watches one interface with netlink, runs separate collectors for interface
-state, listener state, and upstream reachability, evaluates a fixed set of
-health checks, sends an `ntfy` notification only when the check results
-change, and exposes a local Connect RPC API over a Unix domain socket.
+state, listener state, upstream reachability, and local Unbound validation,
+evaluates a fixed set of health checks, sends an `ntfy` notification only when
+the check results change, and exposes a local Connect RPC API over a Unix
+domain socket.
 
 The current health model is intentionally narrow:
 
@@ -112,6 +113,9 @@ Optional:
   - interval for logging Go runtime stats
   - set to `0` to disable the reporter
   - default: `168h`
+- `UNBOUND_POLL_INTERVAL`
+  - interval for polling local Unbound validation state
+  - default: `5m`
 
 Upstream probing is pinned in code:
 
@@ -222,9 +226,11 @@ Example output:
 [2026-04-17T16:02:11-04:00] refresh_requested    refresh requested scope=upstream
 [2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream reason=trace refresh
 [2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=12.4ms probe_kind=root responder=192.203.230.10 status=ok target=e.root-servers.net.
-[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=6.1ms probe_kind=dnssec_positive status=ok ad=true rcode=NOERROR target=127.0.0.1:5335
 [2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv6 latency=15.1ms probe_kind=public_ip provider=Google status=ok ip=2607:f2c0:... target=2001:4860:4802:32::a
 [2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=upstream duration=58.3ms reason=trace refresh
+[2026-04-17T16:02:11-04:00] collector_started    collector started collector=unbound reason=trace refresh
+[2026-04-17T16:02:11-04:00] probe_result         probe result family=local latency=6.1ms probe_kind=dnssec_positive provider=unbound status=ok ad=true rcode=NOERROR target=127.0.0.1:5335
+[2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=unbound duration=7.4ms reason=trace refresh
 [2026-04-17T16:02:11-04:00] checks_changed       checks evaluated changed=1 reason=trace refresh
 [2026-04-17T16:02:11-04:00] notification_skipped notification skipped reason=no effective changes
 [2026-04-17T16:02:11-04:00] trace_completed      trace completed duration=59.0ms scope=upstream
@@ -404,6 +410,7 @@ By default the schedulers run on these cadences:
 - interface poll: `10m`
 - listener poll: `10m`
 - upstream poll: `5m`
+- unbound poll: `5m`
 - runtime stats: `168h`
 
 ## Notes
