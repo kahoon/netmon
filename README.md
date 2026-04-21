@@ -1,6 +1,6 @@
 # netmon
 
-`netmon` is a small Linux network monitor for a DNS appliance host.
+`netmon` is a small Linux network monitor for a home network appliance host.
 
 It watches one interface with netlink, runs separate collectors for interface
 state, listener state, upstream reachability, local Unbound validation, local
@@ -10,6 +10,8 @@ exposes a local Connect RPC API over a Unix domain socket.
 
 The current health model is intentionally narrow:
 
+- the host's DNS stack must remain healthy end to end
+- the host must remain reachable over Tailscale
 - the monitored interface must remain operational
 - the expected IPv6 ULA must be present
 - at least one usable IPv6 GUA must be present
@@ -24,10 +26,18 @@ The current health model is intentionally narrow:
 - Tailscale must remain connected to the tailnet
 - public IPv4 and public IPv6 changes are observed and reported as informational changes
 
-This makes it much quieter than a raw address-change notifier. Temporary IPv6
-churn is ignored unless it changes one of the checks above.
+This keeps it much quieter than a raw address-change notifier or a generic host
+monitor. Temporary IPv6 churn is ignored unless it changes one of the checks
+above.
 
 ## What It Checks
+
+The checks are grouped around four concerns:
+
+- interface and listener invariants on the host
+- upstream DNS reachability and correctness
+- local DNS behavior through Unbound and Pi-hole
+- Tailscale connectivity for remote reachability
 
 For the monitored interface:
 
@@ -462,6 +472,9 @@ sudo systemctl enable --now netmon
 Edit `/etc/default/netmon` for your environment before starting the service.
 
 ## How It Works
+
+At a high level, `netmon` reconciles the state of a network appliance rather
+than trying to be a general-purpose monitoring agent.
 
 1. Look up the monitored interface.
 2. Subscribe to link, address, and route updates with netlink.
