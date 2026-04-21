@@ -175,7 +175,8 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 		Unbound: &netmonv1.UnboundState{
 			Dnssec: mapDNSSECProbeResult(state.Unbound.DNSSEC),
 		},
-		Pihole: mapPiHoleState(state.PiHole),
+		Pihole:    mapPiHoleState(state.PiHole),
+		Tailscale: mapTailscaleState(state.Tailscale),
 	}), nil
 }
 
@@ -194,6 +195,7 @@ func (h *Handler) GetInfo(ctx context.Context, _ *connect.Request[netmonv1.GetIn
 		UpstreamPoll:         info.UpstreamPoll.String(),
 		UnboundPoll:          info.UnboundPoll.String(),
 		PiholePoll:           info.PiHolePoll.String(),
+		TailscalePoll:        info.TailscalePoll.String(),
 		RuntimeStatsInterval: info.RuntimeStatsInterval.String(),
 		NtfyHost:             info.NtfyHost,
 		Commit:               info.Commit,
@@ -420,6 +422,8 @@ func mapRefreshScope(scope netmonv1.RefreshScope) (monitor.RefreshScope, error) 
 		return monitor.RefreshScopeUnbound, nil
 	case netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE:
 		return monitor.RefreshScopePiHole, nil
+	case netmonv1.RefreshScope_REFRESH_SCOPE_TAILSCALE:
+		return monitor.RefreshScopeTailscale, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope: %s", scope.String())
 	}
@@ -554,6 +558,54 @@ func mapDNSLatencyWindow(window model.DNSLatencyWindow) *netmonv1.DnsLatencyWind
 		out.Max = durationpb.New(window.Max)
 	}
 	return out
+}
+
+func mapTailscaleState(state model.TailscaleState) *netmonv1.TailscaleState {
+	return &netmonv1.TailscaleState{
+		Status:    mapTailscaleStatus(state.Status),
+		Addresses: mapTailscaleAddresses(state.Addresses),
+		Peers:     mapTailscalePeers(state.Peers),
+		Roles:     mapTailscaleRoles(state.Roles),
+	}
+}
+
+func mapTailscaleStatus(status model.TailscaleStatus) *netmonv1.TailscaleStatus {
+	return &netmonv1.TailscaleStatus{
+		Running:        status.Running,
+		BackendState:   status.BackendState,
+		Authenticated:  status.Authenticated,
+		Connected:      status.Connected,
+		Version:        status.Version,
+		HostName:       status.HostName,
+		DnsName:        status.DNSName,
+		Tailnet:        status.Tailnet,
+		MagicDnsSuffix: status.MagicDNSSuffix,
+		Detail:         status.Detail,
+	}
+}
+
+func mapTailscaleAddresses(addresses model.TailscaleAddresses) *netmonv1.TailscaleAddresses {
+	return &netmonv1.TailscaleAddresses{
+		Ipv4: addresses.IPv4,
+		Ipv6: addresses.IPv6,
+	}
+}
+
+func mapTailscalePeers(peers model.TailscalePeers) *netmonv1.TailscalePeers {
+	return &netmonv1.TailscalePeers{
+		Total:  peers.Total,
+		Online: peers.Online,
+		Direct: peers.Direct,
+		Relay:  peers.Relay,
+	}
+}
+
+func mapTailscaleRoles(roles model.TailscaleRoles) *netmonv1.TailscaleRoles {
+	return &netmonv1.TailscaleRoles{
+		AdvertisesExitNode: roles.AdvertisesExitNode,
+		AdvertisedRoutes:   slices.Clone(roles.AdvertisedRoutes),
+		Detail:             roles.Detail,
+	}
 }
 
 func hasProbeFamily(probe model.SocketProbe, family int) bool {

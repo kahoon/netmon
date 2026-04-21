@@ -37,6 +37,7 @@ enum RefreshScope {
   REFRESH_SCOPE_UPSTREAM = 4;
   REFRESH_SCOPE_UNBOUND = 5;
   REFRESH_SCOPE_PIHOLE = 6;
+  REFRESH_SCOPE_TAILSCALE = 7;
 }
 
 enum TaskEventKind {
@@ -243,12 +244,51 @@ message PiHoleState {
   DnsLatencyWindow latency_ipv6 = 8;
 }
 
+message TailscaleStatus {
+  bool running = 1;
+  string backend_state = 2;
+  bool authenticated = 3;
+  bool connected = 4;
+  string version = 5;
+  string host_name = 6;
+  string dns_name = 7;
+  string tailnet = 8;
+  string magic_dns_suffix = 9;
+  string detail = 10;
+}
+
+message TailscaleAddresses {
+  string ipv4 = 1;
+  string ipv6 = 2;
+}
+
+message TailscalePeers {
+  uint64 total = 1;
+  uint64 online = 2;
+  uint64 direct = 3;
+  uint64 relay = 4;
+}
+
+message TailscaleRoles {
+  bool advertises_exit_node = 1;
+  repeated string advertised_routes = 2;
+  string detail = 3;
+}
+
+message TailscaleState {
+  TailscaleStatus status = 1;
+  TailscaleAddresses addresses = 2;
+  TailscalePeers peers = 3;
+  TailscaleRoles roles = 4;
+}
+
 message GetStateResponse {
   InterfaceState interface = 1;
   ListenerState listeners = 2;
   UpstreamState upstream = 3;
   UnboundState unbound = 4;
   PiHoleState pihole = 5;
+  TailscaleState tailscale = 6;
 }
 
 message GetInfoRequest {}
@@ -266,6 +306,7 @@ message GetInfoResponse {
   string build_time = 10;
   string unbound_poll = 11;
   string pihole_poll = 12;
+  string tailscale_poll = 13;
 }
 
 message GetStatsRequest {}

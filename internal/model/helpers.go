@@ -78,6 +78,16 @@ func CopySystemState(in SystemState) SystemState {
 			LatencyIPv4: in.PiHole.LatencyIPv4,
 			LatencyIPv6: in.PiHole.LatencyIPv6,
 		},
+		Tailscale: TailscaleState{
+			Status:    in.Tailscale.Status,
+			Addresses: in.Tailscale.Addresses,
+			Peers:     in.Tailscale.Peers,
+			Roles: TailscaleRoles{
+				AdvertisesExitNode: in.Tailscale.Roles.AdvertisesExitNode,
+				AdvertisedRoutes:   append([]string{}, in.Tailscale.Roles.AdvertisedRoutes...),
+				Detail:             in.Tailscale.Roles.Detail,
+			},
+		},
 	}
 }
 
