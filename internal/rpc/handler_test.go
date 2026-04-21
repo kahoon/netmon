@@ -17,9 +17,9 @@ import (
 
 type fakeService struct {
 	status        monitor.StatusView
-	watchSub      monitor.StatusSubscription
-	taskSub       monitor.TaskSubscription
-	checkSub      monitor.CheckSubscription
+	watchSub      monitor.Subscription[monitor.StatusView]
+	taskSub       monitor.Subscription[monitor.TaskEvent]
+	checkSub      monitor.Subscription[monitor.CheckEvent]
 	state         model.SystemState
 	info          monitor.Info
 	snapshot      stats.Snapshot
@@ -31,19 +31,19 @@ type fakeService struct {
 }
 
 func (f *fakeService) GetStatus(context.Context) (monitor.StatusView, error) { return f.status, nil }
-func (f *fakeService) WatchStatus(context.Context) (monitor.StatusSubscription, error) {
+func (f *fakeService) WatchStatus(context.Context) (monitor.Subscription[monitor.StatusView], error) {
 	if f.watchSub != nil {
 		return f.watchSub, nil
 	}
 	return &fakeSubscription{updates: make(chan monitor.StatusView)}, nil
 }
-func (f *fakeService) WatchTasks(context.Context) (monitor.TaskSubscription, error) {
+func (f *fakeService) WatchTasks(context.Context) (monitor.Subscription[monitor.TaskEvent], error) {
 	if f.taskSub != nil {
 		return f.taskSub, nil
 	}
 	return &fakeTaskSubscription{updates: make(chan monitor.TaskEvent)}, nil
 }
-func (f *fakeService) WatchChecks(context.Context) (monitor.CheckSubscription, error) {
+func (f *fakeService) WatchChecks(context.Context) (monitor.Subscription[monitor.CheckEvent], error) {
 	if f.checkSub != nil {
 		return f.checkSub, nil
 	}

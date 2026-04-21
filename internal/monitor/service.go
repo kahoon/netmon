@@ -44,9 +44,9 @@ type StatusView = events.StatusView
 
 type Service interface {
 	GetStatus(ctx context.Context) (StatusView, error)
-	WatchStatus(ctx context.Context) (StatusSubscription, error)
-	WatchTasks(ctx context.Context) (TaskSubscription, error)
-	WatchChecks(ctx context.Context) (CheckSubscription, error)
+	WatchStatus(ctx context.Context) (Subscription[StatusView], error)
+	WatchTasks(ctx context.Context) (Subscription[TaskEvent], error)
+	WatchChecks(ctx context.Context) (Subscription[CheckEvent], error)
 	GetState(ctx context.Context) (model.SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
 	GetStats(ctx context.Context) (stats.Snapshot, error)
@@ -65,15 +65,15 @@ func (m *Monitor) GetStatus(_ context.Context) (StatusView, error) {
 	return statusViewFromSnapshot(state, checks), nil
 }
 
-func (m *Monitor) WatchStatus(_ context.Context) (StatusSubscription, error) {
+func (m *Monitor) WatchStatus(_ context.Context) (Subscription[StatusView], error) {
 	return m.subscribeStatus(), nil
 }
 
-func (m *Monitor) WatchTasks(_ context.Context) (TaskSubscription, error) {
+func (m *Monitor) WatchTasks(_ context.Context) (Subscription[TaskEvent], error) {
 	return m.subscribeTasks(), nil
 }
 
-func (m *Monitor) WatchChecks(_ context.Context) (CheckSubscription, error) {
+func (m *Monitor) WatchChecks(_ context.Context) (Subscription[CheckEvent], error) {
 	return m.subscribeChecks(), nil
 }
 

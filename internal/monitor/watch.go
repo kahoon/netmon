@@ -8,8 +8,8 @@ import (
 	"github.com/kahoon/netmon/internal/model"
 )
 
-type StatusSubscription interface {
-	Updates() <-chan StatusView
+type Subscription[T any] interface {
+	Updates() <-chan T
 	Close()
 }
 
@@ -33,11 +33,6 @@ type TaskEvent struct {
 	Error    string
 }
 
-type TaskSubscription interface {
-	Updates() <-chan TaskEvent
-	Close()
-}
-
 type CheckEvent struct {
 	At               time.Time
 	Key              string
@@ -48,11 +43,6 @@ type CheckEvent struct {
 	CurrentSeverity  model.Severity
 	CurrentSummary   string
 	CurrentDetail    string
-}
-
-type CheckSubscription interface {
-	Updates() <-chan CheckEvent
-	Close()
 }
 
 func statusViewFromSnapshot(state model.SystemState, checks model.CheckSet) StatusView {
@@ -86,32 +76,18 @@ func statusViewsEqual(a, b StatusView) bool {
 	return true
 }
 
-type taskSubscription struct {
-	updates chan TaskEvent
+type subscription[T any] struct {
+	updates chan T
 	done    chan struct{}
 	close   func()
 	once    sync.Once
 }
 
-type statusSubscription struct {
-	updates chan StatusView
-	done    chan struct{}
-	close   func()
-	once    sync.Once
-}
-
-type checkSubscription struct {
-	updates chan CheckEvent
-	done    chan struct{}
-	close   func()
-	once    sync.Once
-}
-
-func (s *statusSubscription) Updates() <-chan StatusView {
+func (s *subscription[T]) Updates() <-chan T {
 	return s.updates
 }
 
-func (s *statusSubscription) Close() {
+func (s *subscription[T]) Close() {
 	s.once.Do(func() {
 		close(s.done)
 		if s.close != nil {
@@ -120,35 +96,9 @@ func (s *statusSubscription) Close() {
 	})
 }
 
-func (s *taskSubscription) Updates() <-chan TaskEvent {
-	return s.updates
-}
-
-func (s *taskSubscription) Close() {
-	s.once.Do(func() {
-		close(s.done)
-		if s.close != nil {
-			s.close()
-		}
-	})
-}
-
-func (s *checkSubscription) Updates() <-chan CheckEvent {
-	return s.updates
-}
-
-func (s *checkSubscription) Close() {
-	s.once.Do(func() {
-		close(s.done)
-		if s.close != nil {
-			s.close()
-		}
-	})
-}
-
-func newTaskSubscription(sub *events.Subscription) TaskSubscription {
-	out := &taskSubscription{
-		updates: make(chan TaskEvent, 64),
+func newSubscription[T any](sub *events.Subscription, buffer int, convert func(events.Event) (T, bool)) Subscription[T] {
+	out := &subscription[T]{
+		updates: make(chan T, buffer),
 		done:    make(chan struct{}),
 		close:   sub.Close,
 	}
@@ -165,13 +115,13 @@ func newTaskSubscription(sub *events.Subscription) TaskSubscription {
 					return
 				}
 
-				task, ok := taskEventFromDomain(event)
+				value, ok := convert(event)
 				if !ok {
 					continue
 				}
 
 				select {
-				case out.updates <- task:
+				case out.updates <- value:
 				case <-out.done:
 					return
 				}
@@ -182,76 +132,16 @@ func newTaskSubscription(sub *events.Subscription) TaskSubscription {
 	return out
 }
 
-func newStatusSubscription(sub *events.Subscription) StatusSubscription {
-	out := &statusSubscription{
-		updates: make(chan StatusView, 1),
-		done:    make(chan struct{}),
-		close:   sub.Close,
-	}
-
-	go func() {
-		defer close(out.updates)
-
-		for {
-			select {
-			case <-out.done:
-				return
-			case event, ok := <-sub.Events():
-				if !ok {
-					return
-				}
-
-				status, ok := statusViewFromDomain(event)
-				if !ok {
-					continue
-				}
-
-				select {
-				case out.updates <- status:
-				case <-out.done:
-					return
-				}
-			}
-		}
-	}()
-
-	return out
+func newTaskSubscription(sub *events.Subscription) Subscription[TaskEvent] {
+	return newSubscription(sub, 64, taskEventFromDomain)
 }
 
-func newCheckSubscription(sub *events.Subscription) CheckSubscription {
-	out := &checkSubscription{
-		updates: make(chan CheckEvent, 64),
-		done:    make(chan struct{}),
-		close:   sub.Close,
-	}
+func newStatusSubscription(sub *events.Subscription) Subscription[StatusView] {
+	return newSubscription(sub, 1, statusViewFromDomain)
+}
 
-	go func() {
-		defer close(out.updates)
-
-		for {
-			select {
-			case <-out.done:
-				return
-			case event, ok := <-sub.Events():
-				if !ok {
-					return
-				}
-
-				check, ok := checkEventFromDomain(event)
-				if !ok {
-					continue
-				}
-
-				select {
-				case out.updates <- check:
-				case <-out.done:
-					return
-				}
-			}
-		}
-	}()
-
-	return out
+func newCheckSubscription(sub *events.Subscription) Subscription[CheckEvent] {
+	return newSubscription(sub, 64, checkEventFromDomain)
 }
 
 func statusEventsOnly(event events.Event) bool {

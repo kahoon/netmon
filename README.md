@@ -130,9 +130,6 @@ Optional:
   - interval for logging Go runtime stats
   - set to `0` to disable the reporter
   - default: `168h`
-- `UNBOUND_POLL_INTERVAL`
-  - interval for polling local Unbound validation state
-  - default: `5m`
 - `PIHOLE_PASSWORD`
   - bootstrap password used to obtain the short-lived Pi-hole API session token
 
@@ -206,7 +203,7 @@ The local CLI talks to `netmond` over the Unix domain socket. Typical commands:
 ```bash
 netmonctl status
 netmonctl trace
-netmonctl watch
+netmonctl watch status
 netmonctl watch tasks
 netmonctl watch checks
 netmonctl checks
@@ -264,9 +261,9 @@ Example output:
 
 ## Streaming and Live Observability
 
-`netmon` exposes two live streaming views over its local Connect RPC API:
+`netmon` exposes three live streaming views over its local Connect RPC API:
 
-- `netmonctl watch`
+- `netmonctl watch status`
 - `netmonctl watch tasks`
 - `netmonctl watch checks`
 
@@ -274,7 +271,7 @@ They serve different purposes.
 
 ### `watch`: live health state
 
-`netmonctl watch` is the operator-facing stream.
+`netmonctl watch status` is the operator-facing stream.
 
 It sends the current health view immediately when the client connects, then
 pushes a new update only when the effective status changes. That means it is
@@ -312,7 +309,7 @@ single monolithic reconcile loop.
 
 New task subscribers are also seeded with a small recent history, so `watch
 tasks` is useful even if you attach after interesting work has already
-happened. That retained history is backed by another sister repo
+happened. That retained history is backed by another sister repo, the
 [`ring`](https://github.com/kahoon/ring) package, which keeps the replay path
 simple and bounded.
 
@@ -380,11 +377,11 @@ Example:
   timeout
 ```
 
-### Why the two streams are separate
+### Why the three streams are separate
 
-The split between `watch`, `watch checks`, and `watch tasks` is deliberate.
+The split between `watch status`, `watch checks`, and `watch tasks` is deliberate.
 
-- `watch` is for the appliance operator
+- `watch status` is for the appliance operator
 - `watch checks` is for understanding health transitions at the check level
 - `watch tasks` is for debugging, development, and understanding the scheduler
 
@@ -397,8 +394,8 @@ there.
 
 The streaming layer is intentionally narrow.
 
-- The daemon uses server-streaming Connect RPCs over a Unix domain socket.
-- `watch` is backed by a status broadcaster that only emits on effective health
+- The daemon uses server-streaming Connect RPCs and HTTP/2 over a Unix domain socket.
+- `watch status` is backed by a status broadcaster that only emits on effective health
   changes.
 - `watch tasks` is backed by the
   [`pending`](https://github.com/kahoon/pending) `TelemetryHandler`

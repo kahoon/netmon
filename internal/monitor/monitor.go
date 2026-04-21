@@ -304,7 +304,7 @@ func (m *Monitor) notifyError(ctx context.Context, reason string, err error) {
 	}
 }
 
-func (m *Monitor) subscribeStatus() StatusSubscription {
+func (m *Monitor) subscribeStatus() Subscription[StatusView] {
 	m.mu.Lock()
 	initial := statusViewFromSnapshot(m.state, m.checks)
 	m.mu.Unlock()
@@ -319,12 +319,12 @@ func (m *Monitor) subscribeStatus() StatusSubscription {
 	return newStatusSubscription(sub)
 }
 
-func (m *Monitor) subscribeTasks() TaskSubscription {
+func (m *Monitor) subscribeTasks() Subscription[TaskEvent] {
 	sub := m.bus.Subscribe("tasks")
 	return newTaskSubscription(sub)
 }
 
-func (m *Monitor) subscribeChecks() CheckSubscription {
+func (m *Monitor) subscribeChecks() Subscription[CheckEvent] {
 	sub := m.bus.Subscribe("checks")
 	return newCheckSubscription(sub)
 }
