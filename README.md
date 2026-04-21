@@ -3,8 +3,8 @@
 `netmon` is a small Linux network monitor for a DNS appliance host.
 
 It watches one interface with netlink, runs separate collectors for interface
-state, listener state, upstream reachability, local Unbound validation, and
-local Pi-hole service/configuration state, evaluates a fixed set of health
+state, listener state, upstream reachability, local Unbound validation, local
+Pi-hole service/configuration state, and local Tailscale state, evaluates a fixed set of health
 checks, sends an `ntfy` notification only when the check results change, and
 exposes a local Connect RPC API over a Unix domain socket.
 
@@ -21,6 +21,7 @@ The current health model is intentionally narrow:
 - Pi-hole must remain enabled
 - Pi-hole must forward only to local Unbound
 - Pi-hole gravity must not become stale
+- Tailscale must remain connected to the tailnet
 - public IPv4 and public IPv6 changes are observed and reported as informational changes
 
 This makes it much quieter than a raw address-change notifier. Temporary IPv6
@@ -67,6 +68,14 @@ For local Pi-hole service and policy state:
 - Pi-hole upstreams must remain pinned to local Unbound on `127.0.0.1#5335` and `::1#5335`
 - Pi-hole gravity must not age past the configured freshness threshold
 
+For local Tailscale state:
+
+- `tailscale status --json` must report a running backend
+- the node must remain authenticated
+- at least one Tailscale address must be assigned
+- the node must remain connected to the tailnet
+- exit-node status and advertised routes are collected for operator visibility
+
 ## Alert Severity
 
 - `CRIT`
@@ -80,6 +89,7 @@ For local Pi-hole service and policy state:
   - Pi-hole DNS fails over IPv6
   - Pi-hole blocking is disabled
   - Pi-hole upstreams do not match local Unbound
+  - Tailscale is not connected
 - `WARN`
   - no usable IPv6 GUA
   - external DNS is degraded on IPv4
@@ -143,6 +153,7 @@ Upstream probing is pinned in code:
 - local Pi-hole DNS probes target Pi-hole directly on `127.0.0.1:53` and `::1:53`
 - Pi-hole policy/configuration state is read through the local Pi-hole v6 API
 - Pi-hole gravity freshness currently uses a fixed `7d` threshold
+- Tailscale state is read locally through `tailscale status --json` and `tailscale debug prefs`
 
 If `EXPECTED_ULA` is unset, the ULA check is skipped.
 
@@ -213,6 +224,7 @@ netmonctl state --json
 netmonctl info
 netmonctl refresh --scope upstream
 netmonctl refresh --scope pihole
+netmonctl refresh --scope tailscale
 netmonctl set debug-logging on
 netmonctl set runtime-stats-interval 30m
 netmonctl help refresh
@@ -230,6 +242,7 @@ then exits when that work completes. It is meant for answering questions like:
 - which collectors ran
 - which upstream probes succeeded or failed
 - which local Pi-hole probes succeeded or failed
+- whether Tailscale collection succeeded
 - how checks changed
 - whether a notification was sent or skipped
 - how long the refresh took
@@ -240,6 +253,7 @@ Examples:
 netmonctl trace
 netmonctl trace -scope upstream
 netmonctl trace -scope pihole
+netmonctl trace -scope tailscale
 ```
 
 Example output:
@@ -452,7 +466,7 @@ Edit `/etc/default/netmon` for your environment before starting the service.
 1. Look up the monitored interface.
 2. Subscribe to link, address, and route updates with netlink.
 3. Debounce interface bursts for `8s`.
-4. Refresh interface, listeners, upstream reachability, local Unbound validation, and local Pi-hole state on separate schedules.
+4. Refresh interface, listeners, upstream reachability, local Unbound validation, local Pi-hole state, and local Tailscale state on separate schedules.
 5. Evaluate a fixed set of checks against the latest collected state.
 6. Notify only if a check changed or the observed public IPv4 or IPv6 changed.
 
@@ -463,6 +477,7 @@ By default the schedulers run on these cadences:
 - upstream poll: `5m`
 - unbound poll: `5m`
 - pihole poll: `5m`
+- tailscale poll: `5m`
 - runtime stats: `168h`
 
 ## Notes
@@ -485,5 +500,9 @@ By default the schedulers run on these cadences:
 - Pi-hole latency windows are retained in a bounded
   [`ring`](https://github.com/kahoon/ring) buffer so the trend logic stays
   fixed-size without steady-state slice churn.
+- Tailscale reachability is intentionally narrow for alerting. The check answers
+  whether the host remains connected to the tailnet, while peer counts,
+  exit-node status, and advertised routes are exposed as state for future
+  dashboard use.
 - Notification delivery resolves the notification host through a dedicated
   fallback resolver instead of the local system resolver.

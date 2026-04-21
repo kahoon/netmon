@@ -22,6 +22,7 @@ const (
 	RefreshScopeUpstream
 	RefreshScopeUnbound
 	RefreshScopePiHole
+	RefreshScopeTailscale
 )
 
 // Info contains static information about the monitor instance.
@@ -36,6 +37,7 @@ type Info struct {
 	UpstreamPoll         time.Duration
 	UnboundPoll          time.Duration
 	PiHolePoll           time.Duration
+	TailscalePoll        time.Duration
 	RuntimeStatsInterval time.Duration
 	NtfyHost             string
 }

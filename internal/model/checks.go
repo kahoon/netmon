@@ -25,6 +25,7 @@ const (
 	checkPiHoleBlocking  = "pihole-blocking"
 	checkPiHoleUpstreams = "pihole-upstreams"
 	checkPiHoleGravity   = "pihole-gravity"
+	checkTailscale       = "tailscale-connected"
 )
 
 var checkOrder = []string{
@@ -45,6 +46,7 @@ var checkOrder = []string{
 	checkPiHoleBlocking,
 	checkPiHoleUpstreams,
 	checkPiHoleGravity,
+	checkTailscale,
 }
 
 func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
@@ -66,6 +68,7 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, piholeBlockingCheck(state.PiHole.Status))
 	addCheck(checks, piholeUpstreamsCheck(state.PiHole.Upstreams))
 	addCheck(checks, piholeGravityCheck(state.PiHole.Gravity))
+	addCheck(checks, tailscaleConnectedCheck(state.Tailscale))
 	return checks
 }
 
@@ -335,6 +338,48 @@ func piholeGravityCheck(gravity PiHoleGravity) CheckResult {
 		check.Severity = SeverityWarn
 		check.Summary = "Pi-hole gravity stale"
 		check.Detail = "last updated " + gravity.LastUpdated.Local().Format(time.RFC3339)
+	}
+	return check
+}
+
+func tailscaleConnectedCheck(state TailscaleState) CheckResult {
+	check := CheckResult{
+		Key:      checkTailscale,
+		Label:    "Tailscale connectivity",
+		Severity: SeverityOK,
+	}
+
+	if state.Status.Connected {
+		return check
+	}
+
+	check.Severity = SeverityCrit
+	switch {
+	case state.Status.Detail != "" && state.Status.BackendState == "":
+		check.Summary = "Tailscale state unavailable"
+		check.Detail = state.Status.Detail
+	case !state.Status.Running:
+		check.Summary = "Tailscale not running"
+	case !state.Status.Authenticated:
+		check.Summary = "Tailscale not authenticated"
+	case state.Addresses.IPv4 == "" && state.Addresses.IPv6 == "":
+		check.Summary = "Tailscale has no assigned address"
+	default:
+		check.Summary = "Tailscale disconnected"
+	}
+
+	var detail []string
+	if state.Status.BackendState != "" {
+		detail = append(detail, "backend="+state.Status.BackendState)
+	}
+	if state.Status.Detail != "" {
+		detail = append(detail, state.Status.Detail)
+	}
+	if state.Status.Tailnet != "" {
+		detail = append(detail, "tailnet="+state.Status.Tailnet)
+	}
+	if check.Detail == "" {
+		check.Detail = strings.Join(detail, "; ")
 	}
 	return check
 }

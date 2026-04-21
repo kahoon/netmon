@@ -139,6 +139,7 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 				UpstreamPoll:         5 * time.Minute,
 				UnboundPoll:          5 * time.Minute,
 				PiHolePoll:           5 * time.Minute,
+				TailscalePoll:        5 * time.Minute,
 				RuntimeStatsInterval: 24 * time.Hour,
 				NtfyHost:             "ntfy.sh",
 			},
@@ -164,6 +165,9 @@ func TestGetInfoMapsBuildMetadata(t *testing.T) {
 	}
 	if got, want := resp.Msg.GetPiholePoll(), "5m0s"; got != want {
 		t.Fatalf("GetInfo().PiholePoll = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetTailscalePoll(), "5m0s"; got != want {
+		t.Fatalf("GetInfo().TailscalePoll = %q, want %q", got, want)
 	}
 }
 
@@ -213,6 +217,30 @@ func TestGetStateMapsPiHoleAndUnboundState(t *testing.T) {
 						Trend:   model.LatencyTrendStable,
 					},
 				},
+				Tailscale: model.TailscaleState{
+					Status: model.TailscaleStatus{
+						Running:       true,
+						BackendState:  "Running",
+						Authenticated: true,
+						Connected:     true,
+						Version:       "1.96.4",
+						Tailnet:       "example.ts.net",
+					},
+					Addresses: model.TailscaleAddresses{
+						IPv4: "100.64.0.1",
+						IPv6: "fd7a:115c:a1e0::1",
+					},
+					Peers: model.TailscalePeers{
+						Total:  3,
+						Online: 2,
+						Direct: 1,
+						Relay:  1,
+					},
+					Roles: model.TailscaleRoles{
+						AdvertisesExitNode: true,
+						AdvertisedRoutes:   []string{"0.0.0.0/0", "::/0", "192.168.1.0/24"},
+					},
+				},
 			},
 		},
 	}
@@ -242,6 +270,15 @@ func TestGetStateMapsPiHoleAndUnboundState(t *testing.T) {
 	}
 	if got, want := resp.Msg.GetPihole().GetLatencyIpv4().GetTrend(), "stable"; got != want {
 		t.Fatalf("GetState().Pihole.LatencyIpv4.Trend = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetTailscale().GetStatus().GetBackendState(), "Running"; got != want {
+		t.Fatalf("GetState().Tailscale.Status.BackendState = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetTailscale().GetAddresses().GetIpv4(), "100.64.0.1"; got != want {
+		t.Fatalf("GetState().Tailscale.Addresses.Ipv4 = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetTailscale().GetRoles().GetAdvertisesExitNode(), true; got != want {
+		t.Fatalf("GetState().Tailscale.Roles.AdvertisesExitNode = %t, want %t", got, want)
 	}
 }
 

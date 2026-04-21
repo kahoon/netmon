@@ -150,7 +150,7 @@ func runTrace(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContextWithTimeout(spec, args, forever, func(fs *flag.FlagSet) {
 		fs.BoolVar(&noTraceID, "no-trace-id", false, "Don't include a trace ID in emitted events (for testing)")
-		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream, unbound, pihole")
+		fs.StringVar(&scopeName, "scope", "all", "Trace scope: all, interface, listeners, upstream, unbound, pihole, tailscale")
 	})
 	defer cmd.cancel()
 
@@ -284,6 +284,7 @@ func runInfo(spec commandSpec, args []string) {
 	fmt.Printf("Upstream Poll:      %s\n", resp.Msg.GetUpstreamPoll())
 	fmt.Printf("Unbound Poll:       %s\n", resp.Msg.GetUnboundPoll())
 	fmt.Printf("Pi-hole Poll:       %s\n", resp.Msg.GetPiholePoll())
+	fmt.Printf("Tailscale Poll:     %s\n", resp.Msg.GetTailscalePoll())
 	fmt.Printf("Runtime Stats:      %s\n", resp.Msg.GetRuntimeStatsInterval())
 	fmt.Printf("Notify Host:        %s\n", resp.Msg.GetNtfyHost())
 	fmt.Printf("RPC Socket:         %s\n", cmd.socketPath)
@@ -292,7 +293,7 @@ func runInfo(spec commandSpec, args []string) {
 func runRefresh(spec commandSpec, args []string) {
 	var scopeName string
 	cmd := newCommandContext(spec, args, func(fs *flag.FlagSet) {
-		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream, unbound, pihole")
+		fs.StringVar(&scopeName, "scope", "all", "Refresh scope: all, interface, listeners, upstream, unbound, pihole, tailscale")
 	})
 	defer cmd.cancel()
 
@@ -420,6 +421,8 @@ func parseRefreshScope(value string) (netmonv1.RefreshScope, error) {
 		return netmonv1.RefreshScope_REFRESH_SCOPE_UNBOUND, nil
 	case "pihole":
 		return netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE, nil
+	case "tailscale":
+		return netmonv1.RefreshScope_REFRESH_SCOPE_TAILSCALE, nil
 	default:
 		return 0, fmt.Errorf("unknown refresh scope %q", value)
 	}
@@ -444,6 +447,8 @@ func canonicalRefreshScope(scope netmonv1.RefreshScope) string {
 		return "unbound"
 	case netmonv1.RefreshScope_REFRESH_SCOPE_PIHOLE:
 		return "pihole"
+	case netmonv1.RefreshScope_REFRESH_SCOPE_TAILSCALE:
+		return "tailscale"
 	default:
 		return "all"
 	}
@@ -517,6 +522,13 @@ func printState(resp *netmonv1.GetStateResponse) {
 	printPiHoleCounters(resp.GetPihole().GetCounters())
 	printDNSLatencyWindow("Latency IPv4", resp.GetPihole().GetLatencyIpv4())
 	printDNSLatencyWindow("Latency IPv6", resp.GetPihole().GetLatencyIpv6())
+
+	fmt.Println()
+	fmt.Println("Tailscale")
+	printTailscaleStatus(resp.GetTailscale().GetStatus())
+	printTailscaleAddresses(resp.GetTailscale().GetAddresses())
+	printTailscalePeers(resp.GetTailscale().GetPeers())
+	printTailscaleRoles(resp.GetTailscale().GetRoles())
 }
 
 func printStats(resp *netmonv1.GetStatsResponse) {
@@ -831,6 +843,44 @@ func printDNSLatencyWindow(label string, window *netmonv1.DnsLatencyWindow) {
 	}
 	if len(parts) > 0 {
 		fmt.Printf("  %-19s %s\n", "", strings.Join(parts, " "))
+	}
+}
+
+func printTailscaleStatus(status *netmonv1.TailscaleStatus) {
+	fmt.Printf("  %-21s %t\n", "Running:", status.GetRunning())
+	fmt.Printf("  %-21s %s\n", "Backend State:", defaultString(status.GetBackendState(), "(unknown)"))
+	fmt.Printf("  %-21s %t\n", "Authenticated:", status.GetAuthenticated())
+	fmt.Printf("  %-21s %t\n", "Connected:", status.GetConnected())
+	fmt.Printf("  %-21s %s\n", "Version:", defaultString(status.GetVersion(), "(unknown)"))
+	fmt.Printf("  %-21s %s\n", "Hostname:", defaultString(status.GetHostName(), "(unknown)"))
+	fmt.Printf("  %-21s %s\n", "DNS Name:", defaultString(status.GetDnsName(), "(unknown)"))
+	fmt.Printf("  %-21s %s\n", "Tailnet:", defaultString(status.GetTailnet(), "(unknown)"))
+	fmt.Printf("  %-21s %s\n", "MagicDNS Suffix:", defaultString(status.GetMagicDnsSuffix(), "(unknown)"))
+	if detail := status.GetDetail(); detail != "" {
+		fmt.Printf("  %-19s %s\n", "Detail:", detail)
+	}
+}
+
+func printTailscaleAddresses(addresses *netmonv1.TailscaleAddresses) {
+	fmt.Printf("  %-21s %s\n", "IPv4:", defaultString(addresses.GetIpv4(), "(none)"))
+	fmt.Printf("  %-21s %s\n", "IPv6:", defaultString(addresses.GetIpv6(), "(none)"))
+}
+
+func printTailscalePeers(peers *netmonv1.TailscalePeers) {
+	fmt.Printf("  %-21s total=%d online=%d direct=%d relay=%d\n",
+		"Peers:",
+		peers.GetTotal(),
+		peers.GetOnline(),
+		peers.GetDirect(),
+		peers.GetRelay(),
+	)
+}
+
+func printTailscaleRoles(roles *netmonv1.TailscaleRoles) {
+	fmt.Printf("  %-21s %t\n", "Advertises Exit Node:", roles.GetAdvertisesExitNode())
+	fmt.Printf("  %-21s %s\n", "Advertised Routes:", joinOrNone(roles.GetAdvertisedRoutes()))
+	if detail := roles.GetDetail(); detail != "" {
+		fmt.Printf("  %-21s %s\n", "Roles Detail:", detail)
 	}
 }
 

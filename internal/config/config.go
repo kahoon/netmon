@@ -20,6 +20,7 @@ const (
 	defaultUpstreamInterval     = 5 * time.Minute
 	defaultUnboundInterval      = 5 * time.Minute
 	defaultPiHoleInterval       = 5 * time.Minute
+	defaultTailscaleInterval    = 5 * time.Minute
 	defaultHTTPTimeout          = 10 * time.Second
 	defaultDNSProbeTimeout      = 2 * time.Second
 	defaultRuntimeStatsInterval = 7 * 24 * time.Hour
@@ -45,6 +46,7 @@ type Config struct {
 	UpstreamPollInterval  time.Duration
 	UnboundPollInterval   time.Duration
 	PiHolePollInterval    time.Duration
+	TailscalePollInterval time.Duration
 	HTTPTimeout           time.Duration
 	DNSProbeTimeout       time.Duration
 	RuntimeStatsInterval  time.Duration
@@ -67,6 +69,7 @@ func LoadConfig() Config {
 		UpstreamPollInterval:  defaultUpstreamInterval,
 		UnboundPollInterval:   getenvDuration("UNBOUND_POLL_INTERVAL", defaultUnboundInterval),
 		PiHolePollInterval:    getenvDuration("PIHOLE_POLL_INTERVAL", defaultPiHoleInterval),
+		TailscalePollInterval: defaultTailscaleInterval,
 		HTTPTimeout:           defaultHTTPTimeout,
 		DNSProbeTimeout:       defaultDNSProbeTimeout,
 		RuntimeStatsInterval:  getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),

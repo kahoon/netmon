@@ -169,3 +169,58 @@ func TestPiHoleChecks(t *testing.T) {
 		}
 	})
 }
+
+func TestTailscaleConnectedCheck(t *testing.T) {
+	t.Parallel()
+
+	t.Run("connected is healthy", func(t *testing.T) {
+		t.Parallel()
+
+		got := tailscaleConnectedCheck(TailscaleState{
+			Status: TailscaleStatus{
+				Running:       true,
+				Authenticated: true,
+				Connected:     true,
+				BackendState:  "Running",
+			},
+			Addresses: TailscaleAddresses{IPv4: "100.64.0.1"},
+		})
+		if got.Severity != SeverityOK {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityOK)
+		}
+	})
+
+	t.Run("missing state is critical", func(t *testing.T) {
+		t.Parallel()
+
+		got := tailscaleConnectedCheck(TailscaleState{
+			Status: TailscaleStatus{
+				Detail: "exec: tailscale not found",
+			},
+		})
+		if got.Severity != SeverityCrit {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
+		}
+		if got.Summary != "Tailscale state unavailable" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Tailscale state unavailable")
+		}
+	})
+
+	t.Run("not authenticated is critical", func(t *testing.T) {
+		t.Parallel()
+
+		got := tailscaleConnectedCheck(TailscaleState{
+			Status: TailscaleStatus{
+				Running:       true,
+				Authenticated: false,
+				BackendState:  "NeedsLogin",
+			},
+		})
+		if got.Severity != SeverityCrit {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityCrit)
+		}
+		if got.Summary != "Tailscale not authenticated" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Tailscale not authenticated")
+		}
+	})
+}

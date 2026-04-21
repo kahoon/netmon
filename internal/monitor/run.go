@@ -85,11 +85,13 @@ func (m *Monitor) Run(ctx context.Context) error {
 	upstreamTicker := time.NewTicker(m.cfg.UpstreamPollInterval)
 	unboundTicker := time.NewTicker(m.cfg.UnboundPollInterval)
 	piholeTicker := time.NewTicker(m.cfg.PiHolePollInterval)
+	tailscaleTicker := time.NewTicker(m.cfg.TailscalePollInterval)
 	defer interfaceTicker.Stop()
 	defer listenerTicker.Stop()
 	defer upstreamTicker.Stop()
 	defer unboundTicker.Stop()
 	defer piholeTicker.Stop()
+	defer tailscaleTicker.Stop()
 
 	for {
 		select {
@@ -144,6 +146,9 @@ func (m *Monitor) Run(ctx context.Context) error {
 
 		case <-piholeTicker.C:
 			scheduleSkipIfRunning("refresh:pihole", "pihole poll", m.RefreshPiHole)
+
+		case <-tailscaleTicker.C:
+			scheduleSkipIfRunning("refresh:tailscale", "tailscale poll", m.RefreshTailscale)
 		}
 	}
 }

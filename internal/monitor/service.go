@@ -71,6 +71,7 @@ func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 		UpstreamPoll:         m.cfg.UpstreamPollInterval,
 		UnboundPoll:          m.cfg.UnboundPollInterval,
 		PiHolePoll:           m.cfg.PiHolePollInterval,
+		TailscalePoll:        m.cfg.TailscalePollInterval,
 		RuntimeStatsInterval: runtimeStatsInterval,
 		NtfyHost:             m.cfg.NtfyHost,
 	}, nil
@@ -131,6 +132,8 @@ func (m *Monitor) refreshWithReason(ctx context.Context, scope RefreshScope, rea
 		return m.RefreshUnbound(ctx, reason)
 	case RefreshScopePiHole:
 		return m.RefreshPiHole(ctx, reason)
+	case RefreshScopeTailscale:
+		return m.RefreshTailscale(ctx, reason)
 	case RefreshScopeAll:
 		fallthrough
 	default:
@@ -146,7 +149,10 @@ func (m *Monitor) refreshWithReason(ctx context.Context, scope RefreshScope, rea
 		if err := m.RefreshUnbound(ctx, reason); err != nil {
 			return err
 		}
-		return m.RefreshPiHole(ctx, reason)
+		if err := m.RefreshPiHole(ctx, reason); err != nil {
+			return err
+		}
+		return m.RefreshTailscale(ctx, reason)
 	}
 }
 
@@ -162,6 +168,8 @@ func formatRefreshScope(scope RefreshScope) string {
 		return "unbound"
 	case RefreshScopePiHole:
 		return "pihole"
+	case RefreshScopeTailscale:
+		return "tailscale"
 	default:
 		return "all"
 	}

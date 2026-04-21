@@ -129,12 +129,20 @@ type PiHoleState struct {
 	LatencyIPv6 DNSLatencyWindow
 }
 
+type TailscaleState struct {
+	Status    TailscaleStatus
+	Addresses TailscaleAddresses
+	Peers     TailscalePeers
+	Roles     TailscaleRoles
+}
+
 type SystemState struct {
 	Interface InterfaceState
 	Listeners ListenerState
 	Upstream  UpstreamState
 	Unbound   UnboundState
 	PiHole    PiHoleState
+	Tailscale TailscaleState
 }
 
 type SocketProbe struct {
@@ -336,6 +344,37 @@ type DNSLatencyWindow struct {
 	Max     time.Duration
 	Samples uint64
 	Trend   LatencyTrend
+}
+
+type TailscaleStatus struct {
+	Running        bool
+	BackendState   string
+	Authenticated  bool
+	Connected      bool
+	Version        string
+	HostName       string
+	DNSName        string
+	Tailnet        string
+	MagicDNSSuffix string
+	Detail         string
+}
+
+type TailscaleAddresses struct {
+	IPv4 string
+	IPv6 string
+}
+
+type TailscalePeers struct {
+	Total  uint64
+	Online uint64
+	Direct uint64
+	Relay  uint64
+}
+
+type TailscaleRoles struct {
+	AdvertisesExitNode bool
+	AdvertisedRoutes   []string
+	Detail             string
 }
 
 func hasFamily(bindings []string, family int) bool {
