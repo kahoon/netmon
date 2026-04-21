@@ -14,42 +14,14 @@ import (
 	"github.com/kahoon/netmon/internal/version"
 )
 
-type RefreshScope int
-
-const (
-	RefreshScopeAll RefreshScope = iota
-	RefreshScopeInterface
-	RefreshScopeListeners
-	RefreshScopeUpstream
-	RefreshScopeUnbound
-	RefreshScopePiHole
-)
-
-type Info struct {
-	Version              string
-	Commit               string
-	BuildTime            string
-	StartedAt            time.Time
-	MonitorInterface     string
-	InterfacePoll        time.Duration
-	ListenerPoll         time.Duration
-	UpstreamPoll         time.Duration
-	UnboundPoll          time.Duration
-	PiHolePoll           time.Duration
-	RuntimeStatsInterval time.Duration
-	NtfyHost             string
-}
-
-type StatusView = events.StatusView
-
 type Service interface {
 	GetStatus(ctx context.Context) (StatusView, error)
 	WatchStatus(ctx context.Context) (Subscription[StatusView], error)
 	WatchTasks(ctx context.Context) (Subscription[TaskEvent], error)
 	WatchChecks(ctx context.Context) (Subscription[CheckEvent], error)
-	GetState(ctx context.Context) (model.SystemState, error)
+	GetState(ctx context.Context) (SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
-	GetStats(ctx context.Context) (stats.Snapshot, error)
+	GetStats(ctx context.Context) (StatsSnapshot, error)
 	Refresh(ctx context.Context, scope RefreshScope) error
 	Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error
 	SetDebug(ctx context.Context, debug bool) error

@@ -380,3 +380,22 @@ func checkOutcomeCounts(checks model.CheckSet) (passed int, failed int) {
 	}
 	return passed, failed
 }
+
+func statusEventsOnly(event events.Event) bool {
+	_, ok := event.(events.StatusChanged)
+	return ok
+}
+
+func taskEventsOnly(event events.Event) bool {
+	switch event.(type) {
+	case events.TaskScheduled, events.TaskRescheduled, events.TaskExecuting, events.TaskExecuted, events.TaskCancelled, events.TaskFailed:
+		return true
+	default:
+		return false
+	}
+}
+
+func checksEventsOnly(event events.Event) bool {
+	_, ok := event.(events.CheckChanged)
+	return ok
+}
