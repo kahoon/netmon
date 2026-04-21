@@ -29,12 +29,12 @@ const (
 const DefaultRPCSocketPath = defaultRPCSocketPath
 
 type Config struct {
-	Topic string
+	DebugEvents bool
 
 	MonitorInterface string
 	ExpectedULA      string
-	DebugEvents      bool
 
+	Topic          string
 	NtfyHost       string
 	NtfyResolver   string
 	RPCSocketPath  string
@@ -54,25 +54,25 @@ type Config struct {
 
 func LoadConfig() Config {
 	return Config{
-		Topic:            mustEnv("NTFY_TOPIC"),
-		MonitorInterface: getenvDefault("MONITOR_IF", defaultMonitorInterface),
-		ExpectedULA:      normalizeIPLiteral(getenvDefault("EXPECTED_ULA", "")),
-		DebugEvents:      getenvBool("DEBUG_EVENTS", false),
-		NtfyHost:         getenvDefault("NTFY_HOST", defaultNtfyHost),
-		NtfyResolver:     getenvDefault("NTFY_RESOLVER", defaultNtfyResolver),
-		RPCSocketPath:    getenvDefault("RPC_SOCKET_PATH", defaultRPCSocketPath),
-		PiHolePassword:   getenvDefault("PIHOLE_PASSWORD", ""),
+		MonitorInterface:     getenvDefault("MONITOR_IF", defaultMonitorInterface),
+		ExpectedULA:          normalizeIPLiteral(getenvDefault("EXPECTED_ULA", "")),
+		Topic:                mustEnv("NTFY_TOPIC"),
+		NtfyHost:             getenvDefault("NTFY_HOST", defaultNtfyHost),
+		NtfyResolver:         getenvDefault("NTFY_RESOLVER", defaultNtfyResolver),
+		PiHolePassword:       getenvDefault("PIHOLE_PASSWORD", ""),
+		RPCSocketPath:        getenvDefault("RPC_SOCKET_PATH", defaultRPCSocketPath),
+		DebugEvents:          getenvBool("DEBUG_EVENTS", false),
+		RuntimeStatsInterval: getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),
 
 		NetlinkDebounce:       defaultNetlinkDebounce,
 		InterfacePollInterval: defaultInterfaceInterval,
 		ListenerPollInterval:  defaultListenerInterval,
 		UpstreamPollInterval:  defaultUpstreamInterval,
-		UnboundPollInterval:   getenvDuration("UNBOUND_POLL_INTERVAL", defaultUnboundInterval),
-		PiHolePollInterval:    getenvDuration("PIHOLE_POLL_INTERVAL", defaultPiHoleInterval),
+		UnboundPollInterval:   defaultUnboundInterval,
+		PiHolePollInterval:    defaultPiHoleInterval,
 		TailscalePollInterval: defaultTailscaleInterval,
 		HTTPTimeout:           defaultHTTPTimeout,
 		DNSProbeTimeout:       defaultDNSProbeTimeout,
-		RuntimeStatsInterval:  getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),
 	}
 }
 
