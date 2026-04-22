@@ -14,6 +14,7 @@ type commandSpec struct {
 }
 
 var commandOrder = []string{
+	"top",
 	"status",
 	"trace",
 	"watch",
@@ -26,6 +27,25 @@ var commandOrder = []string{
 }
 
 var commandRegistry = map[string]commandSpec{
+	"top": {
+		name:    "top",
+		summary: "Live dashboard: checks, Pi-hole, and Tailscale at a glance.",
+		help: `Live full-screen dashboard showing checks, Pi-hole, and Tailscale state.
+
+Refreshes the check panel via a live stream. Fetches detail state every 30s.
+
+Keys:
+  r   Trigger an immediate full refresh
+  q   Quit
+
+Usage:
+  netmonctl top [-socket path]
+
+Examples:
+  netmonctl top
+`,
+		run: runTop,
+	},
 	"status": {
 		name:    "status",
 		summary: "Show the current overall health summary and observed public IPs.",

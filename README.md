@@ -217,11 +217,33 @@ The local RPC API listens on:
 /run/netmon/netmond.sock
 ```
 
+## Live Dashboard
+
+`netmonctl top` opens a full-screen live dashboard combining check status,
+Pi-hole state, and Tailscale state in a two-column layout.
+
+![netmonctl top](assets/top.jpg)
+
+The header bar shows the overall health badge, the observed public IPs, the
+daemon version, uptime, and the time since the last status update. The left
+column lists all health checks with their current severity. The right column
+shows Pi-hole and Tailscale state — DNS probe results, latency windows with
+trend arrows, upstream config, gravity freshness, query counters, Tailscale
+connectivity, peer counts, and exit-node status.
+
+Keys:
+- `r` — trigger an immediate full refresh
+- `q` / `Ctrl+C` — quit
+
+The check panel updates continuously via a live stream. Pi-hole and Tailscale
+detail state refresh every 30 seconds or on demand when you press `r`.
+
 ## CLI
 
 The local CLI talks to `netmond` over the Unix domain socket. Typical commands:
 
 ```bash
+netmonctl top
 netmonctl status
 netmonctl trace
 netmonctl watch status
