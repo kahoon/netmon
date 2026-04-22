@@ -20,6 +20,13 @@ const (
 	piHoleDNSPort        = "53"
 	defaultPiHoleAPIURL  = "http://127.0.0.1/api"
 	defaultGravityMaxAge = 7 * 24 * time.Hour
+
+	// Latency trend analysis parameters
+	latencySampleSize = 16
+	trendRecentCount  = latencySampleSize / 4 // recent window: last 25% of samples
+	trendMinSamples   = latencySampleSize / 2 // require at least half the ring filled
+	trendDeltaAbs     = 5 * time.Millisecond
+	trendDeltaPct     = 20
 )
 
 var defaultPiHoleExpectedUpstreams = []string{
@@ -46,8 +53,8 @@ func NewPiHoleCollector(cfg config.Config) *PiHoleCollector {
 		ProbeTimeout:      cfg.DNSProbeTimeout,
 		GravityMaxAge:     defaultGravityMaxAge,
 		ExpectedUpstreams: append([]string{}, defaultPiHoleExpectedUpstreams...),
-		latencyV4:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](12)),
-		latencyV6:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](12)),
+		latencyV4:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](latencySampleSize)),
+		latencyV6:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](latencySampleSize)),
 	}
 }
 
@@ -208,49 +215,39 @@ func buildLatencyWindow(samples *ring.Queue[time.Duration]) model.DNSLatencyWind
 }
 
 func classifyLatencyTrend(samples *ring.Queue[time.Duration]) model.LatencyTrend {
-	if samples == nil || samples.Len() < 8 {
+	if samples == nil || samples.Len() < trendMinSamples {
 		return model.LatencyTrendUnknown
 	}
 
 	count := samples.Len()
-	recentCount := 4
-	if count < recentCount+4 {
-		return model.LatencyTrendUnknown
-	}
-	split := count - recentCount
-	var priorSum time.Duration
-	var recentSum time.Duration
+	split := count - trendRecentCount
+
+	var priorSum, recentSum time.Duration
 	var idx int
 	for sample := range samples.All() {
-		value := *sample
 		if idx < split {
-			priorSum += value
+			priorSum += *sample
 		} else {
-			recentSum += value
+			recentSum += *sample
 		}
 		idx++
 	}
-	recent := recentSum / time.Duration(recentCount)
+
 	prior := priorSum / time.Duration(split)
+	recent := recentSum / time.Duration(trendRecentCount)
 	if prior <= 0 || recent <= 0 {
 		return model.LatencyTrendUnknown
 	}
 
-	delta := recent - prior
-	if delta < 0 {
-		delta = -delta
-	}
-	if delta < 5*time.Millisecond {
+	threshold := max(trendDeltaAbs, prior*trendDeltaPct/100)
+	switch {
+	case recent >= prior+threshold:
+		return model.LatencyTrendRising
+	case recent <= prior-threshold:
+		return model.LatencyTrendFalling
+	default:
 		return model.LatencyTrendStable
 	}
-
-	if recent > prior && recent >= prior+(prior/5) {
-		return model.LatencyTrendRising
-	}
-	if prior > recent && prior >= recent+(recent/5) {
-		return model.LatencyTrendFalling
-	}
-	return model.LatencyTrendStable
 }
 
 func normalizePiHoleUpstreams(values []string) []string {
