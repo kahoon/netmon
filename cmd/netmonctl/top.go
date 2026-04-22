@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,25 +23,26 @@ var (
 )
 
 type topStore struct {
-	mu         sync.Mutex
-	status     *netmonv1.GetStatusResponse
-	state      *netmonv1.GetStateResponse
-	info       *netmonv1.GetInfoResponse
-	lastUpdate time.Time
+	mu            sync.Mutex
+	status        *netmonv1.GetStatusResponse
+	state         *netmonv1.GetStateResponse
+	info          *netmonv1.GetInfoResponse
+	statusUpdated time.Time
+	stateUpdated  time.Time
 }
 
 func (s *topStore) setStatus(v *netmonv1.GetStatusResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.status = v
-	s.lastUpdate = time.Now()
+	s.statusUpdated = time.Now()
 }
 
 func (s *topStore) setState(v *netmonv1.GetStateResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state = v
-	s.lastUpdate = time.Now()
+	s.stateUpdated = time.Now()
 }
 
 func (s *topStore) setInfo(v *netmonv1.GetInfoResponse) {
@@ -49,10 +51,10 @@ func (s *topStore) setInfo(v *netmonv1.GetInfoResponse) {
 	s.info = v
 }
 
-func (s *topStore) get() (*netmonv1.GetStatusResponse, *netmonv1.GetStateResponse, *netmonv1.GetInfoResponse, time.Time) {
+func (s *topStore) get() (*netmonv1.GetStatusResponse, *netmonv1.GetStateResponse, *netmonv1.GetInfoResponse, time.Time, time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.status, s.state, s.info, s.lastUpdate
+	return s.status, s.state, s.info, s.statusUpdated, s.stateUpdated
 }
 
 func runTop(spec commandSpec, args []string) {
@@ -114,13 +116,13 @@ func runTop(spec commandSpec, args []string) {
 	}
 
 	draw := func() {
-		status, state, info, lastUpdate := store.get()
+		status, state, info, statusUpdated, stateUpdated := store.get()
 		w, _, err := term.GetSize(fd)
 		if err != nil || w < 40 {
 			w = 80
 		}
 		fmt.Print("\033[H\033[2J")
-		fmt.Print(renderTop(status, state, info, lastUpdate, w))
+		fmt.Print(renderTop(status, state, info, statusUpdated, stateUpdated, w))
 	}
 
 	draw()
@@ -153,10 +155,10 @@ func runTop(spec commandSpec, args []string) {
 	}
 }
 
-func renderTop(status *netmonv1.GetStatusResponse, state *netmonv1.GetStateResponse, info *netmonv1.GetInfoResponse, lastUpdate time.Time, width int) string {
+func renderTop(status *netmonv1.GetStatusResponse, state *netmonv1.GetStateResponse, info *netmonv1.GetInfoResponse, statusUpdated, stateUpdated time.Time, width int) string {
 	var b strings.Builder
 
-	b.WriteString(renderTopHeader(status, info, lastUpdate, width))
+	b.WriteString(renderTopHeader(status, info, statusUpdated, stateUpdated, width))
 	b.WriteString("\r\n\r\n") // \r required: MakeRaw disables ONLCR so \n alone won't reset column
 
 	leftWidth := width/2 - 1
@@ -200,7 +202,7 @@ func joinColumns(left, right string, leftWidth int) string {
 	return b.String()
 }
 
-func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoResponse, lastUpdate time.Time, width int) string {
+func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoResponse, statusUpdated, stateUpdated time.Time, width int) string {
 	badge := topStyleDim.Render("● connecting...")
 
 	if status != nil {
@@ -238,8 +240,11 @@ func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoR
 			metaParts = append(metaParts, "up "+topFormatAge(uptime))
 		}
 	}
-	if !lastUpdate.IsZero() {
-		metaParts = append(metaParts, "updated "+topFormatAge(time.Since(lastUpdate))+" ago")
+	if !statusUpdated.IsZero() {
+		metaParts = append(metaParts, "status "+topFormatAge(time.Since(statusUpdated))+" ago")
+	}
+	if !stateUpdated.IsZero() {
+		metaParts = append(metaParts, "state "+topFormatAge(time.Since(stateUpdated))+" ago")
 	}
 	metaParts = append(metaParts, "[r]efresh  [q]uit")
 	right := topStyleDim.Render(strings.Join(metaParts, "   "))
@@ -269,17 +274,31 @@ func renderChecksPanel(status *netmonv1.GetStatusResponse, width int) string {
 		return b.String()
 	}
 
-	nameWidth := width - 8 // icon + spaces + severity label
-	if nameWidth < 8 {
-		nameWidth = 8
+	labelWidth := width / 2
+	if labelWidth < 18 {
+		labelWidth = 18
+	}
+	severityWidth := 4
+	summaryWidth := width - labelWidth - severityWidth - 5
+	if summaryWidth < 0 {
+		summaryWidth = 0
 	}
 
-	for _, check := range status.GetChecks() {
-		icon := topSeverityIcon(check.GetSeverity())
-		name := check.GetName()
-		if len(name) > nameWidth {
-			name = name[:nameWidth-1] + "…"
+	var previousSection string
+	for _, check := range topOrderedChecks(status.GetChecks()) {
+		meta := topCheckMetaFor(check)
+		section := meta.section
+		if section != "" && section != previousSection {
+			if previousSection != "" {
+				b.WriteByte('\n')
+			}
+			b.WriteString(topStyleDim.Render(section))
+			b.WriteByte('\n')
+			previousSection = section
 		}
+
+		icon := topSeverityIcon(check.GetSeverity())
+		name := topTruncate(meta.label, labelWidth)
 
 		var sevStr string
 		switch check.GetSeverity() {
@@ -288,18 +307,23 @@ func renderChecksPanel(status *netmonv1.GetStatusResponse, width int) string {
 		case netmonv1.Severity_SEVERITY_CRIT:
 			sevStr = topStyleCrit.Render("CRIT")
 		default:
-			sevStr = topStyleDim.Render("ok")
+			sevStr = topStyleDim.Render("OK")
 		}
 
-		b.WriteString(icon + " " + fmt.Sprintf("%-*s", nameWidth, name) + " " + sevStr)
-		b.WriteByte('\n')
-
+		summary := ""
 		if check.GetSeverity() != netmonv1.Severity_SEVERITY_OK {
-			if summary := check.GetSummary(); summary != "" {
-				b.WriteString(topStyleDim.Render("  " + summary))
-				b.WriteByte('\n')
-			}
+			summary = topTruncate(defaultString(check.GetSummary(), "unhealthy"), summaryWidth)
 		}
+
+		line := icon + " " + padRightVisible(name, labelWidth)
+		if summary != "" {
+			line += "  " + padRightVisible(topStyleDim.Render(summary), summaryWidth)
+		} else if summaryWidth > 0 {
+			line += "  " + strings.Repeat(" ", summaryWidth)
+		}
+		line += " " + padRightVisible(sevStr, severityWidth)
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
 
 	return b.String()
@@ -431,9 +455,15 @@ func renderTopTailscale(ts *netmonv1.TailscaleState, width int) string {
 	b.WriteByte('\n')
 
 	// Tailscale address
-	if addr := ts.GetAddresses(); addr.GetIpv4() != "" {
-		b.WriteString(topRow(topLabelWidth, "Address", addr.GetIpv4()))
-		b.WriteByte('\n')
+	if addr := ts.GetAddresses(); addr != nil {
+		if addr.GetIpv4() != "" {
+			b.WriteString(topRow(topLabelWidth, "IPv4", addr.GetIpv4()))
+			b.WriteByte('\n')
+		}
+		if addr.GetIpv6() != "" {
+			b.WriteString(topRow(topLabelWidth, "IPv6", addr.GetIpv6()))
+			b.WriteByte('\n')
+		}
 	}
 
 	// Peers
@@ -534,4 +564,80 @@ func topFormatCount(n uint64) string {
 	default:
 		return fmt.Sprintf("%d", n)
 	}
+}
+
+type topCheckMeta struct {
+	label   string
+	section string
+	order   int
+}
+
+var topCheckMetaByKey = map[string]topCheckMeta{
+	"interface-oper":           {label: "Interface operational", section: "Interface/Addressing", order: 1},
+	"expected-ula":             {label: "Expected ULA", section: "Interface/Addressing", order: 2},
+	"usable-gua":               {label: "Usable global IPv6", section: "Interface/Addressing", order: 3},
+	"dns53-tcp":                {label: "DNS TCP listening", section: "DNS", order: 4},
+	"dns53-udp":                {label: "DNS UDP listening", section: "DNS", order: 5},
+	"external-dns-v4":          {label: "Upstream DNS IPv4", section: "DNS", order: 6},
+	"external-dns-v6":          {label: "Upstream DNS IPv6", section: "DNS", order: 7},
+	"resolver5335-tcp":         {label: "Unbound TCP localhost", section: "Unbound", order: 8},
+	"resolver5335-udp":         {label: "Unbound UDP localhost", section: "Unbound", order: 9},
+	"resolver5335-exposed-tcp": {label: "Unbound TCP exposed", section: "Unbound", order: 10},
+	"resolver5335-exposed-udp": {label: "Unbound UDP exposed", section: "Unbound", order: 11},
+	"dnssec-validation":        {label: "Unbound DNSSEC", section: "Unbound", order: 12},
+	"pihole-dns-v4":            {label: "Pi-hole DNS IPv4", section: "Pi-hole", order: 13},
+	"pihole-dns-v6":            {label: "Pi-hole DNS IPv6", section: "Pi-hole", order: 14},
+	"pihole-blocking":          {label: "Pi-hole blocking", section: "Pi-hole", order: 15},
+	"pihole-upstreams":         {label: "Pi-hole upstreams", section: "Pi-hole", order: 16},
+	"pihole-gravity":           {label: "Pi-hole gravity", section: "Pi-hole", order: 17},
+	"tailscale-connected":      {label: "Tailscale connected", section: "Tailscale", order: 18},
+}
+
+func topCheckMetaFor(check *netmonv1.Check) topCheckMeta {
+	if meta, ok := topCheckMetaByKey[strings.TrimSpace(check.GetKey())]; ok {
+		return meta
+	}
+	return topCheckMeta{
+		label:   defaultString(check.GetName(), "(unknown)"),
+		section: "Other",
+		order:   1_000,
+	}
+}
+
+func topOrderedChecks(checks []*netmonv1.Check) []*netmonv1.Check {
+	out := append([]*netmonv1.Check(nil), checks...)
+	sort.SliceStable(out, func(i, j int) bool {
+		left := topCheckMetaFor(out[i])
+		right := topCheckMetaFor(out[j])
+		if left.order != right.order {
+			return left.order < right.order
+		}
+		return left.label < right.label
+	})
+	return out
+}
+
+func topTruncate(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(value) <= width {
+		return value
+	}
+	if width == 1 {
+		return "…"
+	}
+	runes := []rune(value)
+	if len(runes) >= width {
+		return string(runes[:width-1]) + "…"
+	}
+	return value
+}
+
+func padRightVisible(value string, width int) string {
+	pad := width - lipgloss.Width(value)
+	if pad <= 0 {
+		return value
+	}
+	return value + strings.Repeat(" ", pad)
 }

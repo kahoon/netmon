@@ -205,10 +205,11 @@ func (TaskEventKind) EnumDescriptor() ([]byte, []int) {
 
 type Check struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Severity      Severity               `protobuf:"varint,2,opt,name=severity,proto3,enum=netmon.v1.Severity" json:"severity,omitempty"`
-	Summary       string                 `protobuf:"bytes,3,opt,name=summary,proto3" json:"summary,omitempty"`
-	Detail        string                 `protobuf:"bytes,4,opt,name=detail,proto3" json:"detail,omitempty"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Severity      Severity               `protobuf:"varint,3,opt,name=severity,proto3,enum=netmon.v1.Severity" json:"severity,omitempty"`
+	Summary       string                 `protobuf:"bytes,4,opt,name=summary,proto3" json:"summary,omitempty"`
+	Detail        string                 `protobuf:"bytes,5,opt,name=detail,proto3" json:"detail,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -241,6 +242,13 @@ func (x *Check) ProtoReflect() protoreflect.Message {
 // Deprecated: Use Check.ProtoReflect.Descriptor instead.
 func (*Check) Descriptor() ([]byte, []int) {
 	return file_netmon_v1_netmon_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Check) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
 }
 
 func (x *Check) GetName() string {
@@ -3611,12 +3619,13 @@ var File_netmon_v1_netmon_proto protoreflect.FileDescriptor
 
 const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\n" +
-	"\x16netmon/v1/netmon.proto\x12\tnetmon.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"~\n" +
-	"\x05Check\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12/\n" +
-	"\bseverity\x18\x02 \x01(\x0e2\x13.netmon.v1.SeverityR\bseverity\x12\x18\n" +
-	"\asummary\x18\x03 \x01(\tR\asummary\x12\x16\n" +
-	"\x06detail\x18\x04 \x01(\tR\x06detail\"\x12\n" +
+	"\x16netmon/v1/netmon.proto\x12\tnetmon.v1\x1a\x1egoogle/protobuf/duration.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\x90\x01\n" +
+	"\x05Check\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12/\n" +
+	"\bseverity\x18\x03 \x01(\x0e2\x13.netmon.v1.SeverityR\bseverity\x12\x18\n" +
+	"\asummary\x18\x04 \x01(\tR\asummary\x12\x16\n" +
+	"\x06detail\x18\x05 \x01(\tR\x06detail\"\x12\n" +
 	"\x10GetStatusRequest\"\xd9\x01\n" +
 	"\x11GetStatusResponse\x12>\n" +
 	"\x10overall_severity\x18\x01 \x01(\x0e2\x13.netmon.v1.SeverityR\x0foverallSeverity\x12\x18\n" +

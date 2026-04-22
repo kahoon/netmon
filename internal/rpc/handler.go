@@ -260,6 +260,7 @@ func mapStatusView(status monitor.StatusView) *netmonv1.GetStatusResponse {
 	checks := make([]*netmonv1.Check, 0, len(status.Checks))
 	for _, check := range status.Checks {
 		checks = append(checks, &netmonv1.Check{
+			Key:      check.Key,
 			Name:     check.Label,
 			Severity: mapSeverity(check.Severity),
 			Summary:  check.Summary,

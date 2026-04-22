@@ -200,7 +200,7 @@ func runChecks(spec commandSpec, args []string) {
 	}
 
 	for _, check := range checks {
-		fmt.Printf("%-24s %-4s %s\n", check.GetName(), formatSeverity(check.GetSeverity()), defaultString(check.GetSummary(), "healthy"))
+		fmt.Printf("%-25s %-4s %s\n", check.GetName(), formatSeverity(check.GetSeverity()), defaultString(check.GetSummary(), "healthy"))
 		if detail := check.GetDetail(); detail != "" {
 			fmt.Printf("  %s\n", detail)
 		}

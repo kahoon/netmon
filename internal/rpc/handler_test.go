@@ -119,6 +119,9 @@ func TestGetStatusMapsOKSeverity(t *testing.T) {
 	if got, want := resp.Msg.GetChecks()[0].GetSeverity(), netmonv1.Severity_SEVERITY_OK; got != want {
 		t.Fatalf("GetStatus().Checks[0].Severity = %s, want %s", got, want)
 	}
+	if got, want := resp.Msg.GetChecks()[0].GetKey(), "expected-ula"; got != want {
+		t.Fatalf("GetStatus().Checks[0].Key = %q, want %q", got, want)
+	}
 	if got, want := resp.Msg.GetPublicIpv6(), "2001:db8::10"; got != want {
 		t.Fatalf("GetStatus().PublicIpv6 = %q, want %q", got, want)
 	}
