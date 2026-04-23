@@ -1,465 +1,197 @@
 # netmon
 
-`netmon` is a small Linux network monitor for a home network appliance host.
+A focused Linux network health monitor for a home network appliance. It watches
+one interface, runs collectors for DNS health (upstream resolvers, local Unbound,
+and Pi-hole), Tailscale connectivity, and listener invariants. It notifies only
+when something meaningful changes.
 
-It watches one interface with netlink, runs separate collectors for interface
-state, listener state, upstream reachability, local Unbound validation, local
-Pi-hole service/configuration state, and local Tailscale state, evaluates a fixed set of health
-checks, sends an `ntfy` notification only when the check results change, and
-exposes a local Connect RPC API over a Unix domain socket.
+The scope is deliberate. Rather than a general-purpose agent, netmon reconciles a
+specific set of invariants that matter for a DNS/VPN appliance and stays quiet
+when those invariants hold. Temporary address churn, brief resolver hiccups, and
+transient IPv6 state do not generate noise. Only effective health transitions do.
 
-The current health model is intentionally narrow:
+## Dashboard
 
-- the host's DNS stack must remain healthy end to end
-- the host must remain reachable over Tailscale
-- the monitored interface must remain operational
-- the expected IPv6 ULA must be present
-- at least one usable IPv6 GUA must be present
-- port `53` must be listening on non-loopback IPv4 and IPv6
-- port `5335` must be listening on loopback only
-- external DNS health must remain functional over IPv4 and IPv6
-- local Unbound DNSSEC validation must behave correctly
-- Pi-hole must answer DNS correctly over IPv4 and IPv6
-- Pi-hole must remain enabled
-- Pi-hole must forward only to local Unbound
-- Pi-hole gravity must not become stale
-- Tailscale must remain connected to the tailnet
-- public IPv4 and public IPv6 changes are observed and reported as informational changes
+`netmonctl top` opens a full-screen live dashboard.
 
-This keeps it much quieter than a raw address-change notifier or a generic host
-monitor. Temporary IPv6 churn is ignored unless it changes one of the checks
-above.
+![netmonctl top](assets/top.jpg)
 
-## What It Checks
+The header bar shows overall health, observed public IPs, daemon version, and
+uptime. The left column lists all health checks with current severity. The right
+column shows Pi-hole state (DNS probes, latency windows with trend arrows,
+upstream config, gravity freshness, query counters), and Tailscale state 
+(connectivity, peers, and exit-node status). Press `r` to refresh, `q` to quit.
 
-The checks are grouped around four concerns:
+## Design
 
-- interface and listener invariants on the host
-- upstream DNS reachability and correctness
-- local DNS behavior through Unbound and Pi-hole
-- Tailscale connectivity for remote reachability
+**Narrow alert model.** The monitor evaluates a fixed set of invariants specific
+to this appliance class. It distinguishes CRIT, WARN, and INFO transitions but
+notifies only on effective health changes, not on every refresh tick or netlink
+event. This keeps mobile notifications short and actionable rather than a stream
+of churn.
 
-For the monitored interface:
+**Debounced, coalesced scheduler.** Collectors run on independent schedules and
+can also be triggered by netlink events. Link/address/route bursts are debounced
+over 8 seconds into a single settled refresh. Redundant work is coalesced. If a
+refresh is already pending, a new trigger reschedules rather than stacks. This is
+backed by [`pending`](https://github.com/kahoon/pending), a purpose-built task
+scheduler with full lifecycle telemetry, written alongside this project.
 
-- operational state must remain `up`
-- exact match for `EXPECTED_ULA`
-- presence of at least one usable global IPv6 address
-  - tentative and deprecated GUAs do not count
+**Clean API boundary.** The daemon exposes all state through a Connect RPC API
+over a Unix domain socket and HTTP/2 streaming. The CLI is a thin client with no 
+shared memory, no files, no side-channel state. This boundary makes the daemon 
+independently introspectable and testable without touching the CLI layer.
 
-For listeners on the host:
+**Three-layer observability.** The streaming API is split by audience:
 
-- `53/tcp` must be reachable on a non-loopback IPv4 bind
-- `53/tcp` must be reachable on a non-loopback IPv6 bind
-- `53/udp` must be reachable on a non-loopback IPv4 bind
-- `53/udp` must be reachable on a non-loopback IPv6 bind
-- `5335/tcp` must be listening on loopback
-- `5335/udp` must be listening on loopback
-- any non-loopback listener on `5335` is treated as exposure and reported
+- `watch status`: operator stream, quiet, only emits on effective health changes
+- `watch checks`: check-level transitions, which check moved and from what severity
+- `watch tasks`: full scheduler telemetry for debugging and development
 
-For outbound reachability:
+Keeping these separate avoids mixing operator-facing health state with internal
+activity. You can watch the scheduler make decisions in real time through `watch
+tasks` without polluting the operator stream.
 
-- an IPv4 UDP DNS query for `.` `NS` must succeed against one pinned root target
-- an IPv6 UDP DNS query for `.` `NS` must succeed against one pinned root target
-- recursive IPv4 resolution of the same pinned root hostnames must return the expected address
-- recursive IPv6 resolution of the same pinned root hostnames must return the expected address
-- the current public IPv4 is observed through a DNS-based provider chain
-- the current public IPv6 is observed through a DNS-based provider chain
+**Bounded, fixed-size data structures.** DNS latency windows use a ring buffer
+from [`ring`](https://github.com/kahoon/ring), a companion package, keeping trend
+analysis fixed-size with no steady-state slice growth. Task history for `watch
+tasks` replay is backed by the same structure.
 
-For local DNSSEC validation:
+**Notification design.** Notifications include only changed non-OK checks.
+Recoveries are reported briefly and healthy checks are omitted. The notification
+host is resolved through a dedicated fallback resolver rather than the local
+system resolver, avoiding the circular failure where a DNS outage also breaks
+the ability to send the alert.
 
-- a recursive `A` query for `internetsociety.org.` against local Unbound on `127.0.0.1:5335` must succeed with `AD=true`
-- a recursive `A` query for `dnssec-failed.org.` against local Unbound on `127.0.0.1:5335` must fail with `SERVFAIL`
+## What It Monitors
 
-For local Pi-hole service and policy state:
+**Interface & listeners** Operational state, expected IPv6 ULA presence, at
+least one usable GUA (tentative and deprecated addresses excluded), and correct
+TCP/UDP listener coverage on ports 53 and 5335.
 
-- an IPv4 recursive query through Pi-hole on `127.0.0.1:53` must return the expected root-server address
-- an IPv6 recursive query through Pi-hole on `::1:53` must return the expected root-server address
-- Pi-hole blocking must remain enabled
-- Pi-hole upstreams must remain pinned to local Unbound on `127.0.0.1#5335` and `::1#5335`
-- Pi-hole gravity must not age past the configured freshness threshold
+**Upstream DNS** Direct `NS .` probes to pinned root servers, recursive
+correctness checks against those same targets, and public IPv4/IPv6 observation
+via DNS-based provider chains with deterministic fallback.
 
-For local Tailscale state:
+**Local DNS stack** DNSSEC validation directly against Unbound on
+`127.0.0.1:5335` (one positive and one negative query), Pi-hole DNS probes over
+IPv4 and IPv6, upstream configuration match, blocking state, and gravity
+freshness.
 
-- `tailscale status --json` must report a running backend
-- the node must remain authenticated
-- at least one Tailscale address must be assigned
-- the node must remain connected to the tailnet
-- exit-node status and advertised routes are collected for operator visibility
+**Tailscale** Backend state, authentication, and tailnet connectivity. Peer
+counts, exit-node status, and advertised routes are collected for operator
+visibility.
 
 ## Alert Severity
 
-- `CRIT`
-  - monitored interface operational state is not `up`
-  - expected ULA missing
-  - `53/tcp` missing IPv4 or IPv6 coverage
-  - `53/udp` missing IPv4 or IPv6 coverage
-  - `5335/tcp` not listening on loopback
-  - `5335/udp` not listening on loopback
-  - Pi-hole DNS fails over IPv4
-  - Pi-hole DNS fails over IPv6
-  - Pi-hole blocking is disabled
-  - Pi-hole upstreams do not match local Unbound
-  - Tailscale is not connected
-- `WARN`
-  - no usable IPv6 GUA
-  - external DNS is degraded on IPv4
-  - external DNS is degraded on IPv6
-  - DNSSEC validation is degraded
-  - Pi-hole gravity is stale
-  - `5335` is exposed on any non-loopback address
-- `INFO`
-  - recovery from a previous warning or critical condition
+- `CRIT` interface down, ULA missing, port 53 uncovered, Pi-hole DNS failing,
+  Pi-hole disabled or misconfigured, Tailscale disconnected
+- `WARN` no usable IPv6 GUA, external DNS degraded, DNSSEC validation degraded,
+  gravity stale, port 5335 exposed on a non-loopback address
+- `INFO` recovery from a previous degraded condition
 
-If both IPv4 DNS probes or both IPv6 DNS probes fail, the monitor reports `CRIT`.
+If both IPv4 DNS probes fail, or both IPv6 DNS probes fail, the monitor reports `CRIT`.
 
-Notifications include the reason for reconciliation, the state transition, and
-only the changed non-OK checks. Recoveries are reported briefly, and successful
-checks are omitted to keep mobile notifications short.
+## CLI
 
-## Environment
+`netmonctl` talks to the daemon over the Unix domain socket:
+
+```bash
+netmonctl top                           # live dashboard
+netmonctl status                        # current health summary
+netmonctl watch [status|tasks|checks]   # live streams
+netmonctl trace [-scope all|interface|listeners|upstream|unbound|pihole|tailscale]
+netmonctl checks [-all]
+netmonctl state [-json]
+netmonctl stats [-json]
+netmonctl info
+netmonctl refresh [-scope ...]
+netmonctl set debug-logging on|off
+netmonctl set runtime-stats-interval 30m
+netmonctl help [command]
+```
+
+Use `-socket` on any command to override the default socket path
+(`/run/netmon/netmond.sock`).
+
+### Observability streams
+
+**`watch status`** is the operator-facing stream. It sends the current health
+view immediately on connect, then pushes updates only when effective health
+changes. Quiet on a stable system, immediate when something matters.
+
+**`watch checks`** sits one level deeper. It replays recent check transitions
+then stays live, showing each check that moved, from what severity to what,
+with the current summary and detail.
+
+**`watch tasks`** is the scheduler-facing stream. It exposes the full
+[`pending`](https://github.com/kahoon/pending) task lifecycle: scheduled,
+rescheduled, executing, executed, cancelled, and failed, with task IDs, delays, and
+durations. New subscribers receive a replay of recent history from a bounded
+[`ring`](https://github.com/kahoon/ring) buffer before live events continue.
+This makes the daemon's internal scheduling decisions inspectable in real time,
+not just inferred from logs.
+
+**`trace`** runs a bounded traced refresh and streams the causal path end to end.
+Unlike `watch`, it triggers the refresh itself and exits when that work completes.
+Useful for answering: which collectors ran, which probes succeeded or failed, how
+long each stage took, whether a notification was sent or suppressed.
+
+Example trace output:
+
+```text
+[2026-04-17T16:02:11-04:00] trace_started        trace started scope=upstream
+[2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream
+[2026-04-17T16:02:11-04:00] probe_result         family=ipv4 latency=12.4ms status=ok target=e.root-servers.net.
+[2026-04-17T16:02:11-04:00] probe_result         family=ipv6 latency=15.1ms status=ok target=j.root-servers.net.
+[2026-04-17T16:02:11-04:00] collector_finished   collector=upstream duration=58.3ms
+[2026-04-17T16:02:11-04:00] notification_skipped reason=no effective changes
+[2026-04-17T16:02:11-04:00] trace_completed      duration=59.0ms scope=upstream
+```
+
+## Configuration
 
 Required:
 
-- `NTFY_TOPIC`
-  - `ntfy.sh` topic to publish notifications to
+- `NTFY_TOPIC` ntfy.sh topic for notifications
 
 Recommended:
 
-- `EXPECTED_ULA`
-  - the exact static ULA you expect on the monitored interface
-  - example: `fd8f:bd66:6363:1::15`
+- `EXPECTED_ULA` exact static ULA expected on the monitored interface
+  (e.g. `fd8f:bd66:6363:1::15`). If unset, the ULA check is skipped.
 
 Optional:
 
-- `MONITOR_IF`
-  - interface name to monitor
-  - default: `eno1`
-- `NTFY_HOST`
-  - notification host name
-  - default: `ntfy.sh`
-- `NTFY_RESOLVER`
-  - DNS resolver used only for resolving the notification host
-  - default: `9.9.9.9:53`
-- `RPC_SOCKET_PATH`
-  - Unix domain socket path for the local RPC API
-  - default: `/run/netmon/netmond.sock`
-- `DEBUG_EVENTS`
-  - enables raw link, address, and route event logging
-  - default: `false`
-- `RUNTIME_STATS_INTERVAL`
-  - interval for logging Go runtime stats
-  - set to `0` to disable the reporter
-  - default: `168h`
-- `PIHOLE_PASSWORD`
-  - bootstrap password used to obtain the short-lived Pi-hole API session token
+- `MONITOR_IF` interface to monitor (default: `eno1`)
+- `NTFY_HOST` notification host (default: `ntfy.sh`)
+- `NTFY_RESOLVER` resolver used only for the notification host (default: `9.9.9.9:53`)
+- `RPC_SOCKET_PATH` Unix socket path (default: `/run/netmon/netmond.sock`)
+- `PIHOLE_PASSWORD` Pi-hole API password for session token
+- `DEBUG_EVENTS` log raw netlink events (default: `false`)
+- `RUNTIME_STATS_INTERVAL` Go runtime stats interval, `0` to disable (default: `168h`)
 
-Upstream probing is pinned in code:
-
-- direct authority-style `NS .` probes go to `e.root-servers.net.` and `j.root-servers.net.`
-- recursive health probes resolve those same root hostnames through public resolvers
-- public IPv4 observation prefers OpenDNS and falls back to Google
-- public IPv6 observation prefers Google and falls back to OpenDNS
-- local DNSSEC validation probes target Unbound directly on `127.0.0.1:5335`
-- local Pi-hole DNS probes target Pi-hole directly on `127.0.0.1:53` and `::1:53`
-- Pi-hole policy/configuration state is read through the local Pi-hole v6 API
-- Pi-hole gravity freshness currently uses a fixed `7d` threshold
-- Tailscale state is read locally through `tailscale status --json` and `tailscale debug prefs`
-
-If `EXPECTED_ULA` is unset, the ULA check is skipped.
-
-## Build
-
-Build on Linux:
+## Build & Deploy
 
 ```bash
+# Build
 go build ./cmd/netmond
-```
+go build ./cmd/netmonctl
 
-Cross-compile from another machine:
-
-```bash
+# Cross-compile from macOS
 GOOS=linux GOARCH=amd64 go build ./cmd/netmond
-```
 
-Convenience targets are also available:
-
-```bash
+# Makefile targets
 make fmt
 make generate
 make test
 make build
 make build-linux
-```
-
-Builds stamp the binary with version metadata. Override it at build time if you
-want a release identifier:
-
-```bash
 make VERSION=v0.1.0 build-linux
 ```
 
-## Run
+Builds stamp the binary with version, commit, and build time metadata.
 
-Example:
-
-```bash
-. /etc/default/netmon
-
-./netmond
-```
-
-The process needs access to Linux netlink and `/proc/net/{tcp,tcp6,udp,udp6}`.
-It is intended to run directly on the Debian host being monitored.
-
-The local RPC API listens on:
-
-```text
-/run/netmon/netmond.sock
-```
-
-## Live Dashboard
-
-`netmonctl top` opens a full-screen live dashboard combining check status,
-Pi-hole state, and Tailscale state in a two-column layout.
-
-![netmonctl top](assets/top.jpg)
-
-The header bar shows the overall health badge, the observed public IPs, the
-daemon version, uptime, and the time since the last status update. The left
-column lists all health checks with their current severity. The right column
-shows Pi-hole and Tailscale state — DNS probe results, latency windows with
-trend arrows, upstream config, gravity freshness, query counters, Tailscale
-connectivity, peer counts, and exit-node status.
-
-Keys:
-- `r` — trigger an immediate full refresh
-- `q` / `Ctrl+C` — quit
-
-The check panel updates continuously via a live stream. Pi-hole and Tailscale
-detail state refresh every 30 seconds or on demand when you press `r`.
-
-## CLI
-
-The local CLI talks to `netmond` over the Unix domain socket. Typical commands:
-
-```bash
-netmonctl top
-netmonctl status
-netmonctl trace
-netmonctl watch status
-netmonctl watch tasks
-netmonctl watch checks
-netmonctl checks
-netmonctl checks --all
-netmonctl state
-netmonctl state --json
-netmonctl info
-netmonctl refresh --scope upstream
-netmonctl refresh --scope pihole
-netmonctl refresh --scope tailscale
-netmonctl set debug-logging on
-netmonctl set runtime-stats-interval 30m
-netmonctl help refresh
-```
-
-Use `-socket` on any command if you want to override the default socket path.
-
-## Trace
-
-`netmonctl trace` runs a bounded traced refresh and streams the causal path end to end.
-
-Unlike `watch`, which observes ongoing daemon state, `trace` causes a refresh itself and
-then exits when that work completes. It is meant for answering questions like:
-
-- which collectors ran
-- which upstream probes succeeded or failed
-- which local Pi-hole probes succeeded or failed
-- whether Tailscale collection succeeded
-- how checks changed
-- whether a notification was sent or skipped
-- how long the refresh took
-
-Examples:
-
-```bash
-netmonctl trace
-netmonctl trace -scope upstream
-netmonctl trace -scope pihole
-netmonctl trace -scope tailscale
-```
-
-Example output:
-
-```text
-[2026-04-17T16:02:11-04:00] trace_started        trace started scope=upstream
-[2026-04-17T16:02:11-04:00] refresh_requested    refresh requested scope=upstream
-[2026-04-17T16:02:11-04:00] collector_started    collector started collector=upstream reason=trace refresh
-[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv4 latency=12.4ms probe_kind=root responder=192.203.230.10 status=ok target=e.root-servers.net.
-[2026-04-17T16:02:11-04:00] probe_result         probe result family=ipv6 latency=15.1ms probe_kind=public_ip provider=Google status=ok ip=2607:f2c0:... target=2001:4860:4802:32::a
-[2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=upstream duration=58.3ms reason=trace refresh
-[2026-04-17T16:02:11-04:00] collector_started    collector started collector=unbound reason=trace refresh
-[2026-04-17T16:02:11-04:00] probe_result         probe result family=local latency=6.1ms probe_kind=dnssec_positive provider=unbound status=ok ad=true rcode=NOERROR target=127.0.0.1:5335
-[2026-04-17T16:02:11-04:00] collector_finished   collector finished collector=unbound duration=7.4ms reason=trace refresh
-[2026-04-17T16:02:11-04:00] checks_changed       checks evaluated changed=1 reason=trace refresh
-[2026-04-17T16:02:11-04:00] notification_skipped notification skipped reason=no effective changes
-[2026-04-17T16:02:11-04:00] trace_completed      trace completed duration=59.0ms scope=upstream
-```
-
-## Streaming and Live Observability
-
-`netmon` exposes three live streaming views over its local Connect RPC API:
-
-- `netmonctl watch status`
-- `netmonctl watch tasks`
-- `netmonctl watch checks`
-
-They serve different purposes.
-
-### `watch`: live health state
-
-`netmonctl watch status` is the operator-facing stream.
-
-It sends the current health view immediately when the client connects, then
-pushes a new update only when the effective status changes. That means it is
-quiet on a stable system and only speaks when something meaningful happens:
-
-- overall severity changes
-- one or more checks change
-- the health summary changes
-- the observed public IPv4 or public IPv6 changes
-
-Example:
-
-```text
-[2026-04-15T20:14:03-04:00] OK   healthy
-[2026-04-15T21:03:18-04:00] WARN external DNS over IPv6 failing
-  - external DNS IPv6: external DNS over IPv6 failing
-[2026-04-15T21:04:02-04:00] OK   healthy
-```
-
-This stream is intentionally state-oriented rather than event-oriented. It does
-not replay every refresh tick or every netlink event. Instead, it answers the
-question:
-
-> “What changed in the effective health of the appliance?”
-
-### `watch tasks`: live scheduler telemetry
-
-`netmonctl watch tasks` is the implementation-facing stream.
-
-It exposes the [`pending`](https://github.com/kahoon/pending) scheduler
-lifecycle through the daemon’s local API. `pending` is a sister repo, and this
-stream makes that orchestration visible in real time. This is particularly
-useful because the monitor relies on debounced and coalesced work rather than a
-single monolithic reconcile loop.
-
-New task subscribers are also seeded with a small recent history, so `watch
-tasks` is useful even if you attach after interesting work has already
-happened. That retained history is backed by another sister repo, the
-[`ring`](https://github.com/kahoon/ring) package, which keeps the replay path
-simple and bounded.
-
-The task stream includes events such as:
-
-- `scheduled`
-- `rescheduled`
-- `executing`
-- `executed`
-- `cancelled`
-- `failed`
-
-along with task metadata when available:
-
-- task id
-- schedule delay
-- execution duration
-- error text
-
-Example:
-
-```text
-[2026-04-15T17:20:19-04:00] scheduled   refresh:upstream delay=0s
-[2026-04-15T17:20:19-04:00] executed    refresh:upstream duration=49.345483ms
-[2026-04-15T17:20:57-04:00] scheduled   refresh:interface:event:eno1 delay=8s
-[2026-04-15T17:20:57-04:00] rescheduled refresh:interface:event:eno1
-[2026-04-15T17:21:05-04:00] executed    refresh:interface:event:eno1 duration=758.411µs
-```
-
-That output is not just “nice to have” logging. It makes several design choices
-concrete and inspectable:
-
-- link/address/route churn is debounced into one settled interface refresh
-- periodic tasks and event-driven tasks use the same scheduler primitive
-- runtime services like the stats reporter are treated as managed tasks
-- failures inside scheduled work become visible without requiring ad hoc logging
-
-In practice, `watch tasks` turns the daemon into something you can reason about
-interactively. Instead of guessing why a refresh happened, whether a debounce
-fired, or whether a task was replaced, you can watch the scheduler make those
-decisions live, and you can still see the most recent task activity even if
-you connect a few moments late.
-
-### `watch checks`: recent and live check transitions
-
-`netmonctl watch checks` sits between the high-level `watch` stream and the
-lower-level task/trace surfaces.
-
-It replays the most recent individual check transitions, then stays attached for
-future ones. Each event shows one check moving from its previous severity to its
-new severity, along with the current summary and detail when present.
-
-This is useful when you want to answer:
-
-- which specific check changed
-- whether a condition degraded or recovered
-- what the newest non-OK summary/detail is
-
-Example:
-
-```text
-[2026-04-20T20:14:03-04:00] external-dns-v6     OK -> WARN  external DNS over IPv6 degraded
-  root: ok; recursive: timeout
-[2026-04-20T20:14:11-04:00] pihole-dns-v6       OK -> CRIT  Pi-hole DNS over IPv6 failing
-  timeout
-```
-
-### Why the three streams are separate
-
-The split between `watch status`, `watch checks`, and `watch tasks` is deliberate.
-
-- `watch status` is for the appliance operator
-- `watch checks` is for understanding health transitions at the check level
-- `watch tasks` is for debugging, development, and understanding the scheduler
-
-Keeping them separate avoids mixing user-facing health state with internal
-activity. The first stream tells you what the appliance believes. The second
-tells you how individual checks moved. The third tells you how the daemon got
-there.
-
-### Implementation notes
-
-The streaming layer is intentionally narrow.
-
-- The daemon uses server-streaming Connect RPCs and HTTP/2 over a Unix domain socket.
-- `watch status` is backed by a status broadcaster that only emits on effective health
-  changes.
-- `watch tasks` is backed by the
-  [`pending`](https://github.com/kahoon/pending) `TelemetryHandler`
-  implementation used by the monitor.
-- Recent task history is retained in a bounded
-  [`ring`](https://github.com/kahoon/ring) buffer and replayed to new
-  `watch tasks` subscribers before live task events continue.
-- Both streams use buffered, non-blocking fanout so a slow client cannot stall
-  the monitor.
-- For status updates, the broadcaster uses a “latest value wins” policy rather
-  than an unbounded event queue.
-
-This keeps the streaming features useful in production, while also making the
-control flow of the daemon visible enough to study and extend.
-
-## systemd
-
-Example unit:
+**systemd unit:**
 
 ```ini
 [Unit]
@@ -480,7 +212,7 @@ RestartSec=5s
 WantedBy=multi-user.target
 ```
 
-Example install:
+**Install:**
 
 ```bash
 sudo install -m 0755 ./netmond /usr/sbin/netmond
@@ -488,56 +220,25 @@ sudo install -m 0755 ./netmonctl /usr/sbin/netmonctl
 sudo install -m 0644 ./contrib/netmon.env.example /etc/default/netmon
 sudo install -m 0644 ./contrib/netmon.service /etc/systemd/system/netmon.service
 sudo systemctl daemon-reload
+```
+
+Edit `/etc/default/netmon` for your environment before starting the service, then:
+
+```bash
 sudo systemctl enable --now netmon
 ```
 
-Edit `/etc/default/netmon` for your environment before starting the service.
-
 ## How It Works
 
-At a high level, `netmon` reconciles the state of a network appliance rather
-than trying to be a general-purpose monitoring agent.
+1. Look up the monitored interface and subscribe to netlink link, address, and
+   route events.
+2. Debounce interface bursts over 8 seconds using
+   [`pending`](https://github.com/kahoon/pending).
+3. Run collectors on independent schedules: interface (10m), listeners (10m),
+   upstream DNS (5m), Unbound (5m), Pi-hole (5m), Tailscale (5m).
+4. Evaluate a fixed check set against the latest collected state.
+5. Notify only if a check changed or the observed public IP changed.
 
-1. Look up the monitored interface.
-2. Subscribe to link, address, and route updates with netlink.
-3. Debounce interface bursts for `8s`.
-4. Refresh interface, listeners, upstream reachability, local Unbound validation, local Pi-hole state, and local Tailscale state on separate schedules.
-5. Evaluate a fixed set of checks against the latest collected state.
-6. Notify only if a check changed or the observed public IPv4 or IPv6 changed.
-
-By default the schedulers run on these cadences:
-
-- interface poll: `10m`
-- listener poll: `10m`
-- upstream poll: `5m`
-- unbound poll: `5m`
-- pihole poll: `5m`
-- tailscale poll: `5m`
-- runtime stats: `168h`
-
-## Notes
-
-- This is Linux-specific.
-- Deployment helpers live under `contrib/`.
-- Protobuf and Connect stubs are generated with Buf from `proto/netmon/v1/netmon.proto`.
-- It currently posts to `https://ntfy.sh/<topic>`.
-- It reads listener state from procfs rather than shelling out to `ss` or
-  `netstat`.
-- Upstream DNS health combines direct root `NS .` probes with recursive
-  correctness checks against the same pinned root hostnames.
-- Public IPv4 and public IPv6 observation both use DNS-based provider chains
-  with deterministic fallback.
-- DNSSEC validation is tested directly against local Unbound on `127.0.0.1:5335`
-  using one positive and one negative validation query.
-- Pi-hole service health is tested directly against the local client-facing DNS
-  listeners on `127.0.0.1:53` and `::1:53`, while Pi-hole control-plane state
-  is read from the v6 API using a short-lived session token.
-- Pi-hole latency windows are retained in a bounded
-  [`ring`](https://github.com/kahoon/ring) buffer so the trend logic stays
-  fixed-size without steady-state slice churn.
-- Tailscale reachability is intentionally narrow for alerting. The check answers
-  whether the host remains connected to the tailnet, while peer counts,
-  exit-node status, and advertised routes are exposed as state for future
-  dashboard use.
-- Notification delivery resolves the notification host through a dedicated
-  fallback resolver instead of the local system resolver.
+The daemon is Linux-specific. It reads listener state from procfs, and Tailscale
+state via `tailscale status --json` and `tailscale debug prefs`. Protobuf and
+Connect stubs are generated with Buf from `proto/netmon/v1/netmon.proto`.
