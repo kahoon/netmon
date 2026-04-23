@@ -6,10 +6,12 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kahoon/netmon/internal/config"
@@ -53,7 +55,7 @@ func runStatus(spec commandSpec, args []string) {
 
 	resp, err := cmd.client.GetStatus(cmd.ctx, connect.NewRequest(&netmonv1.GetStatusRequest{}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	fmt.Printf("Status:     %s\n", formatSeverity(resp.Msg.GetOverallSeverity()))
@@ -98,7 +100,7 @@ func runWatch(spec commandSpec, args []string) {
 			if isCanceledError(err) {
 				return
 			}
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 		defer stream.Close()
 
@@ -106,7 +108,7 @@ func runWatch(spec commandSpec, args []string) {
 			printWatchStatus(stream.Msg().GetStatus())
 		}
 		if err := stream.Err(); err != nil && !isCanceledError(err) {
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 	case "tasks":
 		stream, err := cmd.client.WatchTasks(cmd.ctx, connect.NewRequest(&netmonv1.WatchTasksRequest{}))
@@ -114,7 +116,7 @@ func runWatch(spec commandSpec, args []string) {
 			if isCanceledError(err) {
 				return
 			}
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 		defer stream.Close()
 
@@ -122,7 +124,7 @@ func runWatch(spec commandSpec, args []string) {
 			printTaskEvent(stream.Msg().GetEvent())
 		}
 		if err := stream.Err(); err != nil && !isCanceledError(err) {
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 	case "checks":
 		stream, err := cmd.client.WatchChecks(cmd.ctx, connect.NewRequest(&netmonv1.WatchChecksRequest{}))
@@ -130,7 +132,7 @@ func runWatch(spec commandSpec, args []string) {
 			if isCanceledError(err) {
 				return
 			}
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 		defer stream.Close()
 
@@ -138,7 +140,7 @@ func runWatch(spec commandSpec, args []string) {
 			printCheckEvent(stream.Msg().GetEvent())
 		}
 		if err := stream.Err(); err != nil && !isCanceledError(err) {
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 	default:
 		log.Fatalf("unknown watch subject %q", subject)
@@ -161,7 +163,7 @@ func runTrace(spec commandSpec, args []string) {
 
 	stream, err := cmd.client.Trace(cmd.ctx, connect.NewRequest(&netmonv1.TraceRequest{Scope: scope}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 	defer stream.Close()
 
@@ -169,7 +171,7 @@ func runTrace(spec commandSpec, args []string) {
 		printTraceEvent(stream.Msg().GetEvent(), noTraceID)
 	}
 	if err := stream.Err(); err != nil && !isCanceledError(err) {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 }
 
@@ -182,7 +184,7 @@ func runChecks(spec commandSpec, args []string) {
 
 	resp, err := cmd.client.GetStatus(cmd.ctx, connect.NewRequest(&netmonv1.GetStatusRequest{}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	checks := resp.Msg.GetChecks()
@@ -216,7 +218,7 @@ func runState(spec commandSpec, args []string) {
 
 	resp, err := cmd.client.GetState(cmd.ctx, connect.NewRequest(&netmonv1.GetStateRequest{}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	if !jsonOutput {
@@ -244,7 +246,7 @@ func runStats(spec commandSpec, args []string) {
 
 	resp, err := cmd.client.GetStats(cmd.ctx, connect.NewRequest(&netmonv1.GetStatsRequest{}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	if !jsonOutput {
@@ -269,7 +271,7 @@ func runInfo(spec commandSpec, args []string) {
 
 	resp, err := cmd.client.GetInfo(cmd.ctx, connect.NewRequest(&netmonv1.GetInfoRequest{}))
 	if err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	startedAt := time.Unix(resp.Msg.GetStartedAtUnix(), 0).Local()
@@ -303,7 +305,7 @@ func runRefresh(spec commandSpec, args []string) {
 	}
 
 	if _, err := cmd.client.Refresh(cmd.ctx, connect.NewRequest(&netmonv1.RefreshRequest{Scope: scope})); err != nil {
-		log.Fatal(err)
+		fatalRPC(err, cmd.socketPath)
 	}
 
 	fmt.Printf("Triggered refresh: %s\n", canonicalRefreshScope(scope))
@@ -336,7 +338,7 @@ func runSet(spec commandSpec, args []string) {
 			Debug: enabled,
 		}))
 		if err != nil {
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 		fmt.Printf("%s = %s\n", setting, input)
 	case "runtime-stats-interval":
@@ -349,7 +351,7 @@ func runSet(spec commandSpec, args []string) {
 			Interval: durationpb.New(interval),
 		}))
 		if err != nil {
-			log.Fatal(err)
+			fatalRPC(err, cmd.socketPath)
 		}
 		applied := resp.Msg.GetInterval().AsDuration()
 		fmt.Printf("%s = %s\n", setting, applied)
@@ -946,4 +948,82 @@ func sortedKeys[V any](m map[string]V) []string {
 
 func isCanceledError(err error) bool {
 	return errors.Is(err, context.Canceled) || connect.CodeOf(err) == connect.CodeCanceled
+}
+
+func fatalRPC(err error, socketPath string) {
+	if hint, ok := rpcDiagnostic(err); ok {
+		fmt.Fprintf(os.Stderr, "netmonctl: %s\n", hint.summary)
+		fmt.Fprintf(os.Stderr, "  socket: %s\n", socketPath)
+		if hint.cause != "" {
+			fmt.Fprintf(os.Stderr, "  cause: %s\n", hint.cause)
+		}
+		os.Exit(1)
+	}
+	log.Fatal(err)
+}
+
+type rpcHint struct {
+	summary string
+	cause   string
+}
+
+func rpcDiagnostic(err error) (rpcHint, bool) {
+	if err == nil {
+		return rpcHint{}, false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || connect.CodeOf(err) == connect.CodeDeadlineExceeded {
+		return rpcHint{
+			summary: "connect timeout, is netmond running?",
+			cause:   "request timed out",
+		}, true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return rpcHint{
+			summary: "request timed out, is netmond running?",
+			cause:   "request timed out",
+		}, true
+	}
+
+	if errno, ok := rpcErrno(err); ok {
+		switch errno {
+		case syscall.ENOENT:
+			return rpcHint{
+				summary: "cannot reach netmond, is it running?",
+				cause:   "socket not found",
+			}, true
+		case syscall.ECONNREFUSED:
+			return rpcHint{
+				summary: "cannot reach netmond, is it running?",
+				cause:   "connection refused",
+			}, true
+		case syscall.EACCES, syscall.EPERM:
+			return rpcHint{
+				summary: "cannot reach netmond, root permissions required?",
+				cause:   "permission denied",
+			}, true
+		case syscall.ETIMEDOUT:
+			return rpcHint{
+				summary: "connect timeout, is netmond running?",
+				cause:   "connection timed out",
+			}, true
+		}
+	}
+
+	if connect.CodeOf(err) == connect.CodeUnavailable {
+		return rpcHint{
+			summary: "cannot reach netmond",
+			cause:   err.Error(),
+		}, true
+	}
+
+	return rpcHint{}, false
+}
+
+func rpcErrno(err error) (syscall.Errno, bool) {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return errno, true
+	}
+	return 0, false
 }

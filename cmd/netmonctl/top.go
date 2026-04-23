@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"sort"
@@ -11,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 	"github.com/charmbracelet/lipgloss"
 	netmonv1 "github.com/kahoon/netmon/proto/netmon/v1"
+	netmonv1connect "github.com/kahoon/netmon/proto/netmon/v1/netmonv1connect"
 	"golang.org/x/term"
 )
 
@@ -57,9 +59,120 @@ func (s *topStore) get() (*netmonv1.GetStatusResponse, *netmonv1.GetStateRespons
 	return s.status, s.state, s.info, s.statusUpdated, s.stateUpdated
 }
 
+func newTopRPCContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, requestTimeout)
+}
+
+func seedTopStore(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore) {
+	func() {
+		ctx, cancel := newTopRPCContext(ctx)
+		defer cancel()
+		if resp, err := client.GetStatus(ctx, connect.NewRequest(&netmonv1.GetStatusRequest{})); err == nil {
+			store.setStatus(resp.Msg)
+		}
+	}()
+	func() {
+		ctx, cancel := newTopRPCContext(ctx)
+		defer cancel()
+		if resp, err := client.GetState(ctx, connect.NewRequest(&netmonv1.GetStateRequest{})); err == nil {
+			store.setState(resp.Msg)
+		}
+	}()
+	func() {
+		ctx, cancel := newTopRPCContext(ctx)
+		defer cancel()
+		if resp, err := client.GetInfo(ctx, connect.NewRequest(&netmonv1.GetInfoRequest{})); err == nil {
+			store.setInfo(resp.Msg)
+		}
+	}()
+}
+
+func fetchTopState(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore) {
+	ctx, cancel := newTopRPCContext(ctx)
+	defer cancel()
+	if resp, err := client.GetState(ctx, connect.NewRequest(&netmonv1.GetStateRequest{})); err == nil {
+		store.setState(resp.Msg)
+	}
+}
+
+func refreshTop(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore) {
+	func() {
+		ctx, cancel := newTopRPCContext(ctx)
+		defer cancel()
+		_, _ = client.Refresh(ctx, connect.NewRequest(&netmonv1.RefreshRequest{
+			Scope: netmonv1.RefreshScope_REFRESH_SCOPE_ALL,
+		}))
+	}()
+	fetchTopState(ctx, client, store)
+}
+
+func watchTopStatus(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore, signalDisconnect func(error)) {
+	stream, err := client.WatchStatus(ctx, connect.NewRequest(&netmonv1.WatchStatusRequest{}))
+	if err != nil {
+		if !isCanceledError(err) {
+			signalDisconnect(err)
+		}
+		return
+	}
+	defer stream.Close()
+	for stream.Receive() {
+		store.setStatus(stream.Msg().GetStatus())
+	}
+	if ctx.Err() == nil && !isCanceledError(stream.Err()) {
+		signalDisconnect(stream.Err())
+		return
+	}
+	if ctx.Err() == nil && stream.Err() == nil {
+		signalDisconnect(nil)
+	}
+}
+
+func readTopKeys(keys chan<- byte, in *os.File) {
+	buf := make([]byte, 1)
+	for {
+		n, err := in.Read(buf)
+		if n > 0 {
+			keys <- buf[0]
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func topDisconnectMessage(err error) string {
+	if err == nil {
+		return "lost connection to netmond"
+	}
+	if hint, ok := rpcDiagnostic(err); ok {
+		return hint.summary
+	}
+	return "lost connection to netmond"
+}
+
+func drawTop(fd int, store *topStore) {
+	status, state, info, statusUpdated, stateUpdated := store.get()
+	w, _, err := term.GetSize(fd)
+	if err != nil || w < 40 {
+		w = 80
+	}
+	fmt.Print("\033[H\033[2J")
+	fmt.Print(renderTop(status, state, info, statusUpdated, stateUpdated, w))
+}
+
 func runTop(spec commandSpec, args []string) {
 	cmd := newCommandContextWithTimeout(spec, args, forever)
 	defer cmd.cancel()
+
+	// exitMsg is printed to stderr after the terminal is fully restored.
+	// This defer is registered first so it executes last (LIFO), after the
+	// alternate-screen and raw-mode defers below have already fired.
+	var exitMsg string
+	defer func() {
+		if exitMsg != "" {
+			fmt.Fprintf(os.Stderr, "netmonctl: %s\n", exitMsg)
+		}
+	}()
 
 	fmt.Print("\033[?1049h\033[?25l") // enter alternate screen, hide cursor
 	defer fmt.Print("\033[?1049l\033[?25h")
@@ -70,62 +183,22 @@ func runTop(spec commandSpec, args []string) {
 	}
 
 	store := &topStore{}
+	seedTopStore(cmd.ctx, cmd.client, store)
 
-	// Seed initial data.
-	if resp, err := cmd.client.GetStatus(cmd.ctx, connect.NewRequest(&netmonv1.GetStatusRequest{})); err == nil {
-		store.setStatus(resp.Msg)
-	}
-	if resp, err := cmd.client.GetState(cmd.ctx, connect.NewRequest(&netmonv1.GetStateRequest{})); err == nil {
-		store.setState(resp.Msg)
-	}
-	if resp, err := cmd.client.GetInfo(cmd.ctx, connect.NewRequest(&netmonv1.GetInfoRequest{})); err == nil {
-		store.setInfo(resp.Msg)
-	}
-
-	// Stream status updates in the background.
-	go func() {
-		stream, err := cmd.client.WatchStatus(cmd.ctx, connect.NewRequest(&netmonv1.WatchStatusRequest{}))
-		if err != nil {
-			return
-		}
-		defer stream.Close()
-		for stream.Receive() {
-			store.setStatus(stream.Msg().GetStatus())
-		}
-	}()
+	// disconnectCh receives the underlying watch-stream failure, if any.
+	var disconnectOnce sync.Once
+	disconnectCh := make(chan error, 1)
+	go watchTopStatus(cmd.ctx, cmd.client, store, func(err error) {
+		disconnectOnce.Do(func() {
+			disconnectCh <- err
+		})
+	})
 
 	// Read keypresses one byte at a time.
 	keys := make(chan byte, 4)
-	go func() {
-		buf := make([]byte, 1)
-		for {
-			n, err := os.Stdin.Read(buf)
-			if n > 0 {
-				keys <- buf[0]
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
+	go readTopKeys(keys, os.Stdin)
 
-	fetchState := func() {
-		if resp, err := cmd.client.GetState(cmd.ctx, connect.NewRequest(&netmonv1.GetStateRequest{})); err == nil {
-			store.setState(resp.Msg)
-		}
-	}
-
-	draw := func() {
-		status, state, info, statusUpdated, stateUpdated := store.get()
-		w, _, err := term.GetSize(fd)
-		if err != nil || w < 40 {
-			w = 80
-		}
-		fmt.Print("\033[H\033[2J")
-		fmt.Print(renderTop(status, state, info, statusUpdated, stateUpdated, w))
-	}
-
-	draw()
+	drawTop(fd, store)
 
 	stateTicker := time.NewTicker(30 * time.Second)
 	defer stateTicker.Stop()
@@ -136,21 +209,21 @@ func runTop(spec commandSpec, args []string) {
 		select {
 		case <-cmd.ctx.Done():
 			return
+		case err := <-disconnectCh:
+			exitMsg = topDisconnectMessage(err)
+			return
 		case key := <-keys:
 			switch key {
 			case 'q', 'Q', 3: // 3 = Ctrl+C
 				return
 			case 'r', 'R':
-				_, _ = cmd.client.Refresh(cmd.ctx, connect.NewRequest(&netmonv1.RefreshRequest{
-					Scope: netmonv1.RefreshScope_REFRESH_SCOPE_ALL,
-				}))
-				fetchState()
-				draw()
+				refreshTop(cmd.ctx, cmd.client, store)
+				drawTop(fd, store)
 			}
 		case <-stateTicker.C:
-			fetchState()
+			fetchTopState(cmd.ctx, cmd.client, store)
 		case <-renderTicker.C:
-			draw()
+			drawTop(fd, store)
 		}
 	}
 }
