@@ -204,14 +204,17 @@ Currently supported settings:
                            Use "on" or "off" to set the value.
   runtime-stats-interval   Set the runtime stats logging interval.
                            Use 0 to disable the reporter.
+  alert-history-interval   Set how long recent alerts are retained.
+                           Use 0 to disable alert history.
 
 Usage:
-  netmonctl set [debug-logging <on/off>|runtime-stats-interval <duration>] [-socket path]
+  netmonctl set [debug-logging <on/off>|runtime-stats-interval <duration>|alert-history-interval <duration>] [-socket path]
 
 Examples:
   netmonctl set debug-logging on
   netmonctl set runtime-stats-interval 30m
   netmonctl set runtime-stats-interval 0
+  netmonctl set alert-history-interval 7d
 `,
 		run: runSet,
 	},

@@ -24,6 +24,7 @@ const (
 	defaultHTTPTimeout          = 10 * time.Second
 	defaultDNSProbeTimeout      = 2 * time.Second
 	defaultRuntimeStatsInterval = 7 * 24 * time.Hour
+	defaultAlertHistoryInterval = 7 * 24 * time.Hour
 )
 
 const DefaultRPCSocketPath = defaultRPCSocketPath
@@ -50,6 +51,7 @@ type Config struct {
 	HTTPTimeout           time.Duration
 	DNSProbeTimeout       time.Duration
 	RuntimeStatsInterval  time.Duration
+	AlertHistoryInterval  time.Duration
 }
 
 func LoadConfig() Config {
@@ -63,6 +65,7 @@ func LoadConfig() Config {
 		RPCSocketPath:        getenvDefault("RPC_SOCKET_PATH", defaultRPCSocketPath),
 		DebugEvents:          getenvBool("DEBUG_EVENTS", false),
 		RuntimeStatsInterval: getenvDuration("RUNTIME_STATS_INTERVAL", defaultRuntimeStatsInterval),
+		AlertHistoryInterval: getenvDuration("ALERT_HISTORY_INTERVAL", defaultAlertHistoryInterval),
 
 		NetlinkDebounce:       defaultNetlinkDebounce,
 		InterfacePollInterval: defaultInterfaceInterval,
@@ -111,11 +114,28 @@ func getenvDuration(key string, def time.Duration) time.Duration {
 		return def
 	}
 
-	parsed, err := time.ParseDuration(value)
+	parsed, err := parseDuration(value)
 	if err != nil {
 		return def
 	}
 	return parsed
+}
+
+func parseDuration(value string) (time.Duration, error) {
+	parsedDuration, parseErr := time.ParseDuration(value)
+	if parseErr == nil {
+		return parsedDuration, nil
+	}
+
+	days, ok := strings.CutSuffix(value, "d")
+	if !ok {
+		return 0, parseErr
+	}
+	parsed, err := strconv.ParseFloat(strings.TrimSpace(days), 64)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(parsed * float64(24*time.Hour)), nil
 }
 
 func normalizeIPLiteral(value string) string {

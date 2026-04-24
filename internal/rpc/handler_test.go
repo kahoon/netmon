@@ -23,11 +23,14 @@ type fakeService struct {
 	state         model.SystemState
 	info          monitor.Info
 	snapshot      stats.Snapshot
+	diagnostics   monitor.Diagnostics
 	refreshScope  monitor.RefreshScope
 	refreshErr    error
 	debug         bool
 	statsInterval time.Duration
 	statsErr      error
+	alertInterval time.Duration
+	alertErr      error
 }
 
 func (f *fakeService) GetStatus(context.Context) (monitor.StatusView, error) { return f.status, nil }
@@ -52,6 +55,9 @@ func (f *fakeService) WatchChecks(context.Context) (monitor.Subscription[monitor
 func (f *fakeService) GetState(context.Context) (model.SystemState, error) { return f.state, nil }
 func (f *fakeService) GetInfo(context.Context) (monitor.Info, error)       { return f.info, nil }
 func (f *fakeService) GetStats(context.Context) (stats.Snapshot, error)    { return f.snapshot, nil }
+func (f *fakeService) GetDiagnostics(context.Context) (monitor.Diagnostics, error) {
+	return f.diagnostics, nil
+}
 func (f *fakeService) Trace(context.Context, monitor.RefreshScope, trace.Sink) error {
 	return nil
 }
@@ -66,6 +72,10 @@ func (f *fakeService) SetDebug(_ context.Context, debug bool) error {
 func (f *fakeService) SetRuntimeStatsInterval(_ context.Context, interval time.Duration) error {
 	f.statsInterval = interval
 	return f.statsErr
+}
+func (f *fakeService) SetAlertHistoryInterval(_ context.Context, interval time.Duration) error {
+	f.alertInterval = interval
+	return f.alertErr
 }
 
 type fakeSubscription struct {
@@ -340,6 +350,24 @@ func TestSetRuntimeStatsIntervalMapsTypedDuration(t *testing.T) {
 		t.Fatalf("service interval = %s, want %s", got, want)
 	}
 	if got, want := resp.Msg.GetInterval().AsDuration(), 30*time.Minute; got != want {
+		t.Fatalf("response interval = %s, want %s", got, want)
+	}
+}
+
+func TestSetAlertHistoryIntervalMapsTypedDuration(t *testing.T) {
+	svc := &fakeService{}
+	handler := &Handler{svc: svc}
+
+	resp, err := handler.SetAlertHistoryInterval(context.Background(), connect.NewRequest(&netmonv1.SetAlertHistoryIntervalRequest{
+		Interval: durationpb.New(7 * 24 * time.Hour),
+	}))
+	if err != nil {
+		t.Fatalf("SetAlertHistoryInterval() error = %v", err)
+	}
+	if got, want := svc.alertInterval, 7*24*time.Hour; got != want {
+		t.Fatalf("alertInterval = %s, want %s", got, want)
+	}
+	if got, want := resp.Msg.GetInterval().AsDuration(), 7*24*time.Hour; got != want {
 		t.Fatalf("response interval = %s, want %s", got, want)
 	}
 }

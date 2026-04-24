@@ -197,6 +197,7 @@ func (h *Handler) GetInfo(ctx context.Context, _ *connect.Request[netmonv1.GetIn
 		PiholePoll:           info.PiHolePoll.String(),
 		TailscalePoll:        info.TailscalePoll.String(),
 		RuntimeStatsInterval: info.RuntimeStatsInterval.String(),
+		AlertHistoryInterval: info.AlertHistoryInterval.String(),
 		NtfyHost:             info.NtfyHost,
 		Commit:               info.Commit,
 		BuildTime:            info.BuildTime,
@@ -209,6 +210,14 @@ func (h *Handler) GetStats(ctx context.Context, _ *connect.Request[netmonv1.GetS
 		return nil, err
 	}
 	return connect.NewResponse(mapStatsSnapshot(snapshot)), nil
+}
+
+func (h *Handler) GetDiagnostics(ctx context.Context, _ *connect.Request[netmonv1.GetDiagnosticsRequest]) (*connect.Response[netmonv1.GetDiagnosticsResponse], error) {
+	diagnostics, err := h.svc.GetDiagnostics(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(mapDiagnostics(diagnostics)), nil
 }
 
 func (h *Handler) Refresh(ctx context.Context, req *connect.Request[netmonv1.RefreshRequest]) (*connect.Response[netmonv1.RefreshResponse], error) {
@@ -237,6 +246,19 @@ func (h *Handler) SetRuntimeStatsInterval(ctx context.Context, req *connect.Requ
 		return nil, err
 	}
 	return connect.NewResponse(&netmonv1.SetRuntimeStatsIntervalResponse{
+		Interval: durationpb.New(interval),
+	}), nil
+}
+
+func (h *Handler) SetAlertHistoryInterval(ctx context.Context, req *connect.Request[netmonv1.SetAlertHistoryIntervalRequest]) (*connect.Response[netmonv1.SetAlertHistoryIntervalResponse], error) {
+	interval, err := parseProtoDuration(req.Msg.GetInterval())
+	if err != nil {
+		return nil, connect.NewError(connect.CodeInvalidArgument, err)
+	}
+	if err := h.svc.SetAlertHistoryInterval(ctx, interval); err != nil {
+		return nil, err
+	}
+	return connect.NewResponse(&netmonv1.SetAlertHistoryIntervalResponse{
 		Interval: durationpb.New(interval),
 	}), nil
 }
@@ -363,6 +385,36 @@ func mapStatsSnapshot(snapshot stats.Snapshot) *netmonv1.GetStatsResponse {
 			Completed: snapshot.Traces.Completed,
 			Failed:    snapshot.Traces.Failed,
 		},
+	}
+}
+
+func mapDiagnostics(diagnostics monitor.Diagnostics) *netmonv1.GetDiagnosticsResponse {
+	alerts := make([]*netmonv1.AlertAttempt, 0, len(diagnostics.Alerts))
+	for _, alert := range diagnostics.Alerts {
+		alerts = append(alerts, &netmonv1.AlertAttempt{
+			At:             timestamppb.New(alert.At),
+			DeliveryStatus: mapAlertDeliveryStatus(alert.DeliveryStatus),
+			Severity:       mapSeverity(alert.Severity),
+			Title:          alert.Title,
+			Reason:         alert.Reason,
+			Summary:        alert.Summary,
+			DeliveryError:  alert.DeliveryError,
+		})
+	}
+	return &netmonv1.GetDiagnosticsResponse{
+		AlertHistoryInterval: diagnostics.AlertHistoryInterval.String(),
+		Alerts:               alerts,
+	}
+}
+
+func mapAlertDeliveryStatus(status monitor.AlertDeliveryStatus) netmonv1.AlertDeliveryStatus {
+	switch status {
+	case monitor.AlertDelivered:
+		return netmonv1.AlertDeliveryStatus_ALERT_DELIVERY_STATUS_DELIVERED
+	case monitor.AlertNotDelivered:
+		return netmonv1.AlertDeliveryStatus_ALERT_DELIVERY_STATUS_NOT_DELIVERED
+	default:
+		return netmonv1.AlertDeliveryStatus_ALERT_DELIVERY_STATUS_UNSPECIFIED
 	}
 }
 

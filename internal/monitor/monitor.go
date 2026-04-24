@@ -34,9 +34,11 @@ type Monitor struct {
 	startedAt            time.Time
 	running              bool
 	runtimeStatsInterval time.Duration
+	alertHistoryInterval time.Duration
 
-	bus   *events.Hub
-	stats *stats.Recorder
+	bus          *events.Hub
+	stats        *stats.Recorder
+	alertHistory *alertHistory
 }
 
 func NewMonitor(cfg config.Config) *Monitor {
@@ -53,6 +55,7 @@ func NewMonitor(cfg config.Config) *Monitor {
 		debug:                cfg.DebugEvents,
 		startedAt:            time.Now().Local(),
 		runtimeStatsInterval: cfg.RuntimeStatsInterval,
+		alertHistoryInterval: cfg.AlertHistoryInterval,
 		bus: events.NewHub(
 			events.FeedConfig{
 				Name:   "all",
@@ -77,7 +80,8 @@ func NewMonitor(cfg config.Config) *Monitor {
 				History: 64,
 			},
 		),
-		stats: recorder,
+		stats:        recorder,
+		alertHistory: newAlertHistory(cfg.AlertHistoryInterval),
 	}
 	// Initialize the pending manager with a telemetry implementation that reports to the monitor's logger.
 	// This allows us to track pending operations and their durations.
@@ -129,6 +133,25 @@ func (m *Monitor) Initialize(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (m *Monitor) recordAlertAttempt(note Notification, delivered bool, deliveryErr error, at time.Time) {
+	attempt := AlertAttempt{
+		At:       at,
+		Severity: note.Severity,
+		Title:    note.Title,
+		Reason:   note.Reason,
+		Summary:  note.Summary,
+	}
+	if delivered {
+		attempt.DeliveryStatus = AlertDelivered
+	} else {
+		attempt.DeliveryStatus = AlertNotDelivered
+		if deliveryErr != nil {
+			attempt.DeliveryError = deliveryErr.Error()
+		}
+	}
+	m.alertHistory.Record(attempt)
 }
 
 func (m *Monitor) CurrentLinkIndex() int {
@@ -296,16 +319,20 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 
 	if err := m.notifier.Send(ctx, *note); err != nil {
 		log.Printf("notify failed: %v", err)
+		now := time.Now().Local()
+		m.recordAlertAttempt(*note, false, err, now)
 		events.Emit(ctx, events.NotificationFailed{
-			At:    time.Now().Local(),
+			At:    now,
 			Error: err.Error(),
 		})
 		return
 	}
 
 	log.Printf("notification sent: %s", note.Title)
+	now := time.Now().Local()
+	m.recordAlertAttempt(*note, true, nil, now)
 	events.Emit(ctx, events.NotificationSent{
-		At:       time.Now().Local(),
+		At:       now,
 		Title:    note.Title,
 		Severity: note.Severity.String(),
 	})
@@ -317,11 +344,23 @@ func (m *Monitor) notifyError(ctx context.Context, reason string, err error) {
 	note := BuildErrorNotification(m.cfg, reason, err)
 	if notifyErr := m.notifier.Send(ctx, note); notifyErr != nil {
 		log.Printf("notify failed: %v", notifyErr)
+		now := time.Now().Local()
+		m.recordAlertAttempt(note, false, notifyErr, now)
 		events.Emit(ctx, events.NotificationFailed{
-			At:    time.Now().Local(),
+			At:    now,
 			Error: notifyErr.Error(),
 		})
+		return
 	}
+
+	log.Printf("notification sent: %s", note.Title)
+	now := time.Now().Local()
+	m.recordAlertAttempt(note, true, nil, now)
+	events.Emit(ctx, events.NotificationSent{
+		At:       now,
+		Title:    note.Title,
+		Severity: note.Severity.String(),
+	})
 }
 
 func (m *Monitor) subscribeStatus() Subscription[StatusView] {

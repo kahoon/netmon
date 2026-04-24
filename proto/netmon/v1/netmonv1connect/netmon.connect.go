@@ -52,6 +52,9 @@ const (
 	NetmonServiceGetInfoProcedure = "/netmon.v1.NetmonService/GetInfo"
 	// NetmonServiceGetStatsProcedure is the fully-qualified name of the NetmonService's GetStats RPC.
 	NetmonServiceGetStatsProcedure = "/netmon.v1.NetmonService/GetStats"
+	// NetmonServiceGetDiagnosticsProcedure is the fully-qualified name of the NetmonService's
+	// GetDiagnostics RPC.
+	NetmonServiceGetDiagnosticsProcedure = "/netmon.v1.NetmonService/GetDiagnostics"
 	// NetmonServiceRefreshProcedure is the fully-qualified name of the NetmonService's Refresh RPC.
 	NetmonServiceRefreshProcedure = "/netmon.v1.NetmonService/Refresh"
 	// NetmonServiceSetDebugProcedure is the fully-qualified name of the NetmonService's SetDebug RPC.
@@ -59,6 +62,9 @@ const (
 	// NetmonServiceSetRuntimeStatsIntervalProcedure is the fully-qualified name of the NetmonService's
 	// SetRuntimeStatsInterval RPC.
 	NetmonServiceSetRuntimeStatsIntervalProcedure = "/netmon.v1.NetmonService/SetRuntimeStatsInterval"
+	// NetmonServiceSetAlertHistoryIntervalProcedure is the fully-qualified name of the NetmonService's
+	// SetAlertHistoryInterval RPC.
+	NetmonServiceSetAlertHistoryIntervalProcedure = "/netmon.v1.NetmonService/SetAlertHistoryInterval"
 )
 
 // NetmonServiceClient is a client for the netmon.v1.NetmonService service.
@@ -71,9 +77,11 @@ type NetmonServiceClient interface {
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
 	GetStats(context.Context, *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error)
+	GetDiagnostics(context.Context, *connect.Request[v1.GetDiagnosticsRequest]) (*connect.Response[v1.GetDiagnosticsResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
 	SetDebug(context.Context, *connect.Request[v1.SetDebugRequest]) (*connect.Response[v1.SetDebugResponse], error)
 	SetRuntimeStatsInterval(context.Context, *connect.Request[v1.SetRuntimeStatsIntervalRequest]) (*connect.Response[v1.SetRuntimeStatsIntervalResponse], error)
+	SetAlertHistoryInterval(context.Context, *connect.Request[v1.SetAlertHistoryIntervalRequest]) (*connect.Response[v1.SetAlertHistoryIntervalResponse], error)
 }
 
 // NewNetmonServiceClient constructs a client for the netmon.v1.NetmonService service. By default,
@@ -135,6 +143,12 @@ func NewNetmonServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(netmonServiceMethods.ByName("GetStats")),
 			connect.WithClientOptions(opts...),
 		),
+		getDiagnostics: connect.NewClient[v1.GetDiagnosticsRequest, v1.GetDiagnosticsResponse](
+			httpClient,
+			baseURL+NetmonServiceGetDiagnosticsProcedure,
+			connect.WithSchema(netmonServiceMethods.ByName("GetDiagnostics")),
+			connect.WithClientOptions(opts...),
+		),
 		refresh: connect.NewClient[v1.RefreshRequest, v1.RefreshResponse](
 			httpClient,
 			baseURL+NetmonServiceRefreshProcedure,
@@ -153,6 +167,12 @@ func NewNetmonServiceClient(httpClient connect.HTTPClient, baseURL string, opts 
 			connect.WithSchema(netmonServiceMethods.ByName("SetRuntimeStatsInterval")),
 			connect.WithClientOptions(opts...),
 		),
+		setAlertHistoryInterval: connect.NewClient[v1.SetAlertHistoryIntervalRequest, v1.SetAlertHistoryIntervalResponse](
+			httpClient,
+			baseURL+NetmonServiceSetAlertHistoryIntervalProcedure,
+			connect.WithSchema(netmonServiceMethods.ByName("SetAlertHistoryInterval")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -166,9 +186,11 @@ type netmonServiceClient struct {
 	getState                *connect.Client[v1.GetStateRequest, v1.GetStateResponse]
 	getInfo                 *connect.Client[v1.GetInfoRequest, v1.GetInfoResponse]
 	getStats                *connect.Client[v1.GetStatsRequest, v1.GetStatsResponse]
+	getDiagnostics          *connect.Client[v1.GetDiagnosticsRequest, v1.GetDiagnosticsResponse]
 	refresh                 *connect.Client[v1.RefreshRequest, v1.RefreshResponse]
 	setDebug                *connect.Client[v1.SetDebugRequest, v1.SetDebugResponse]
 	setRuntimeStatsInterval *connect.Client[v1.SetRuntimeStatsIntervalRequest, v1.SetRuntimeStatsIntervalResponse]
+	setAlertHistoryInterval *connect.Client[v1.SetAlertHistoryIntervalRequest, v1.SetAlertHistoryIntervalResponse]
 }
 
 // GetStatus calls netmon.v1.NetmonService.GetStatus.
@@ -211,6 +233,11 @@ func (c *netmonServiceClient) GetStats(ctx context.Context, req *connect.Request
 	return c.getStats.CallUnary(ctx, req)
 }
 
+// GetDiagnostics calls netmon.v1.NetmonService.GetDiagnostics.
+func (c *netmonServiceClient) GetDiagnostics(ctx context.Context, req *connect.Request[v1.GetDiagnosticsRequest]) (*connect.Response[v1.GetDiagnosticsResponse], error) {
+	return c.getDiagnostics.CallUnary(ctx, req)
+}
+
 // Refresh calls netmon.v1.NetmonService.Refresh.
 func (c *netmonServiceClient) Refresh(ctx context.Context, req *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error) {
 	return c.refresh.CallUnary(ctx, req)
@@ -226,6 +253,11 @@ func (c *netmonServiceClient) SetRuntimeStatsInterval(ctx context.Context, req *
 	return c.setRuntimeStatsInterval.CallUnary(ctx, req)
 }
 
+// SetAlertHistoryInterval calls netmon.v1.NetmonService.SetAlertHistoryInterval.
+func (c *netmonServiceClient) SetAlertHistoryInterval(ctx context.Context, req *connect.Request[v1.SetAlertHistoryIntervalRequest]) (*connect.Response[v1.SetAlertHistoryIntervalResponse], error) {
+	return c.setAlertHistoryInterval.CallUnary(ctx, req)
+}
+
 // NetmonServiceHandler is an implementation of the netmon.v1.NetmonService service.
 type NetmonServiceHandler interface {
 	GetStatus(context.Context, *connect.Request[v1.GetStatusRequest]) (*connect.Response[v1.GetStatusResponse], error)
@@ -236,9 +268,11 @@ type NetmonServiceHandler interface {
 	GetState(context.Context, *connect.Request[v1.GetStateRequest]) (*connect.Response[v1.GetStateResponse], error)
 	GetInfo(context.Context, *connect.Request[v1.GetInfoRequest]) (*connect.Response[v1.GetInfoResponse], error)
 	GetStats(context.Context, *connect.Request[v1.GetStatsRequest]) (*connect.Response[v1.GetStatsResponse], error)
+	GetDiagnostics(context.Context, *connect.Request[v1.GetDiagnosticsRequest]) (*connect.Response[v1.GetDiagnosticsResponse], error)
 	Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error)
 	SetDebug(context.Context, *connect.Request[v1.SetDebugRequest]) (*connect.Response[v1.SetDebugResponse], error)
 	SetRuntimeStatsInterval(context.Context, *connect.Request[v1.SetRuntimeStatsIntervalRequest]) (*connect.Response[v1.SetRuntimeStatsIntervalResponse], error)
+	SetAlertHistoryInterval(context.Context, *connect.Request[v1.SetAlertHistoryIntervalRequest]) (*connect.Response[v1.SetAlertHistoryIntervalResponse], error)
 }
 
 // NewNetmonServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -296,6 +330,12 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 		connect.WithSchema(netmonServiceMethods.ByName("GetStats")),
 		connect.WithHandlerOptions(opts...),
 	)
+	netmonServiceGetDiagnosticsHandler := connect.NewUnaryHandler(
+		NetmonServiceGetDiagnosticsProcedure,
+		svc.GetDiagnostics,
+		connect.WithSchema(netmonServiceMethods.ByName("GetDiagnostics")),
+		connect.WithHandlerOptions(opts...),
+	)
 	netmonServiceRefreshHandler := connect.NewUnaryHandler(
 		NetmonServiceRefreshProcedure,
 		svc.Refresh,
@@ -312,6 +352,12 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 		NetmonServiceSetRuntimeStatsIntervalProcedure,
 		svc.SetRuntimeStatsInterval,
 		connect.WithSchema(netmonServiceMethods.ByName("SetRuntimeStatsInterval")),
+		connect.WithHandlerOptions(opts...),
+	)
+	netmonServiceSetAlertHistoryIntervalHandler := connect.NewUnaryHandler(
+		NetmonServiceSetAlertHistoryIntervalProcedure,
+		svc.SetAlertHistoryInterval,
+		connect.WithSchema(netmonServiceMethods.ByName("SetAlertHistoryInterval")),
 		connect.WithHandlerOptions(opts...),
 	)
 	return "/netmon.v1.NetmonService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -332,12 +378,16 @@ func NewNetmonServiceHandler(svc NetmonServiceHandler, opts ...connect.HandlerOp
 			netmonServiceGetInfoHandler.ServeHTTP(w, r)
 		case NetmonServiceGetStatsProcedure:
 			netmonServiceGetStatsHandler.ServeHTTP(w, r)
+		case NetmonServiceGetDiagnosticsProcedure:
+			netmonServiceGetDiagnosticsHandler.ServeHTTP(w, r)
 		case NetmonServiceRefreshProcedure:
 			netmonServiceRefreshHandler.ServeHTTP(w, r)
 		case NetmonServiceSetDebugProcedure:
 			netmonServiceSetDebugHandler.ServeHTTP(w, r)
 		case NetmonServiceSetRuntimeStatsIntervalProcedure:
 			netmonServiceSetRuntimeStatsIntervalHandler.ServeHTTP(w, r)
+		case NetmonServiceSetAlertHistoryIntervalProcedure:
+			netmonServiceSetAlertHistoryIntervalHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -379,6 +429,10 @@ func (UnimplementedNetmonServiceHandler) GetStats(context.Context, *connect.Requ
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.GetStats is not implemented"))
 }
 
+func (UnimplementedNetmonServiceHandler) GetDiagnostics(context.Context, *connect.Request[v1.GetDiagnosticsRequest]) (*connect.Response[v1.GetDiagnosticsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.GetDiagnostics is not implemented"))
+}
+
 func (UnimplementedNetmonServiceHandler) Refresh(context.Context, *connect.Request[v1.RefreshRequest]) (*connect.Response[v1.RefreshResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.Refresh is not implemented"))
 }
@@ -389,4 +443,8 @@ func (UnimplementedNetmonServiceHandler) SetDebug(context.Context, *connect.Requ
 
 func (UnimplementedNetmonServiceHandler) SetRuntimeStatsInterval(context.Context, *connect.Request[v1.SetRuntimeStatsIntervalRequest]) (*connect.Response[v1.SetRuntimeStatsIntervalResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.SetRuntimeStatsInterval is not implemented"))
+}
+
+func (UnimplementedNetmonServiceHandler) SetAlertHistoryInterval(context.Context, *connect.Request[v1.SetAlertHistoryIntervalRequest]) (*connect.Response[v1.SetAlertHistoryIntervalResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("netmon.v1.NetmonService.SetAlertHistoryInterval is not implemented"))
 }

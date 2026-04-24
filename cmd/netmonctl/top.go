@@ -25,12 +25,15 @@ var (
 )
 
 type topStore struct {
-	mu            sync.Mutex
-	status        *netmonv1.GetStatusResponse
-	state         *netmonv1.GetStateResponse
-	info          *netmonv1.GetInfoResponse
-	statusUpdated time.Time
-	stateUpdated  time.Time
+	mu              sync.Mutex
+	status          *netmonv1.GetStatusResponse
+	state           *netmonv1.GetStateResponse
+	info            *netmonv1.GetInfoResponse
+	diagnostics     *netmonv1.GetDiagnosticsResponse
+	statusUpdated   time.Time
+	stateUpdated    time.Time
+	showDiagnostics bool
+	alertIndex      int
 }
 
 func (s *topStore) setStatus(v *netmonv1.GetStatusResponse) {
@@ -53,10 +56,45 @@ func (s *topStore) setInfo(v *netmonv1.GetInfoResponse) {
 	s.info = v
 }
 
-func (s *topStore) get() (*netmonv1.GetStatusResponse, *netmonv1.GetStateResponse, *netmonv1.GetInfoResponse, time.Time, time.Time) {
+func (s *topStore) setDiagnostics(v *netmonv1.GetDiagnosticsResponse) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.status, s.state, s.info, s.statusUpdated, s.stateUpdated
+	s.diagnostics = v
+	s.clampAlertIndexLocked()
+}
+
+func (s *topStore) toggleDiagnostics() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.showDiagnostics = !s.showDiagnostics
+}
+
+func (s *topStore) moveAlert(delta int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	count := len(s.diagnostics.GetAlerts())
+	if !s.showDiagnostics || count <= 1 {
+		return
+	}
+	s.alertIndex = (s.alertIndex + delta + count) % count
+}
+
+func (s *topStore) clampAlertIndexLocked() {
+	count := len(s.diagnostics.GetAlerts())
+	if count == 0 {
+		s.alertIndex = 0
+		return
+	}
+	if s.alertIndex >= count {
+		s.alertIndex = count - 1
+	}
+}
+
+func (s *topStore) get() (*netmonv1.GetStatusResponse, *netmonv1.GetStateResponse, *netmonv1.GetInfoResponse, *netmonv1.GetDiagnosticsResponse, time.Time, time.Time, bool, int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.status, s.state, s.info, s.diagnostics, s.statusUpdated, s.stateUpdated, s.showDiagnostics, s.alertIndex
 }
 
 func newTopRPCContext(parent context.Context) (context.Context, context.CancelFunc) {
@@ -85,6 +123,7 @@ func seedTopStore(ctx context.Context, client netmonv1connect.NetmonServiceClien
 			store.setInfo(resp.Msg)
 		}
 	}()
+	fetchTopDiagnostics(ctx, client, store)
 }
 
 func fetchTopState(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore) {
@@ -92,6 +131,14 @@ func fetchTopState(ctx context.Context, client netmonv1connect.NetmonServiceClie
 	defer cancel()
 	if resp, err := client.GetState(ctx, connect.NewRequest(&netmonv1.GetStateRequest{})); err == nil {
 		store.setState(resp.Msg)
+	}
+}
+
+func fetchTopDiagnostics(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore) {
+	ctx, cancel := newTopRPCContext(ctx)
+	defer cancel()
+	if resp, err := client.GetDiagnostics(ctx, connect.NewRequest(&netmonv1.GetDiagnosticsRequest{})); err == nil {
+		store.setDiagnostics(resp.Msg)
 	}
 }
 
@@ -104,6 +151,7 @@ func refreshTop(ctx context.Context, client netmonv1connect.NetmonServiceClient,
 		}))
 	}()
 	fetchTopState(ctx, client, store)
+	fetchTopDiagnostics(ctx, client, store)
 }
 
 func watchTopStatus(ctx context.Context, client netmonv1connect.NetmonServiceClient, store *topStore, signalDisconnect func(error)) {
@@ -151,13 +199,18 @@ func topDisconnectMessage(err error) string {
 }
 
 func drawTop(fd int, store *topStore) {
-	status, state, info, statusUpdated, stateUpdated := store.get()
-	w, _, err := term.GetSize(fd)
+	status, state, info, diagnostics, statusUpdated, stateUpdated, showDiagnostics, alertIndex := store.get()
+	w, h, err := term.GetSize(fd)
 	if err != nil || w < 40 {
 		w = 80
 	}
+	if h <= 0 {
+		h = 24
+	}
 	fmt.Print("\033[H\033[2J")
-	fmt.Print(renderTop(status, state, info, statusUpdated, stateUpdated, w))
+	fmt.Print(renderTop(status, state, info, diagnostics, statusUpdated, stateUpdated, showDiagnostics, alertIndex, w))
+	fmt.Printf("\033[%d;1H", h)
+	fmt.Print(renderTopFooter(showDiagnostics, w))
 }
 
 func runTop(spec commandSpec, args []string) {
@@ -219,26 +272,36 @@ func runTop(spec commandSpec, args []string) {
 			case 'r', 'R':
 				refreshTop(cmd.ctx, cmd.client, store)
 				drawTop(fd, store)
+			case 'd', 'D':
+				store.toggleDiagnostics()
+				drawTop(fd, store)
+			case 'n', 'N':
+				store.moveAlert(-1)
+				drawTop(fd, store)
+			case 'p', 'P':
+				store.moveAlert(1)
+				drawTop(fd, store)
 			}
 		case <-stateTicker.C:
 			fetchTopState(cmd.ctx, cmd.client, store)
+			fetchTopDiagnostics(cmd.ctx, cmd.client, store)
 		case <-renderTicker.C:
 			drawTop(fd, store)
 		}
 	}
 }
 
-func renderTop(status *netmonv1.GetStatusResponse, state *netmonv1.GetStateResponse, info *netmonv1.GetInfoResponse, statusUpdated, stateUpdated time.Time, width int) string {
+func renderTop(status *netmonv1.GetStatusResponse, state *netmonv1.GetStateResponse, info *netmonv1.GetInfoResponse, diagnostics *netmonv1.GetDiagnosticsResponse, statusUpdated, stateUpdated time.Time, showDiagnostics bool, alertIndex, width int) string {
 	var b strings.Builder
 
-	b.WriteString(renderTopHeader(status, info, statusUpdated, stateUpdated, width))
+	b.WriteString(renderTopHeader(status, info, diagnostics, statusUpdated, stateUpdated, showDiagnostics, width))
 	b.WriteString("\r\n\r\n") // \r required: MakeRaw disables ONLCR so \n alone won't reset column
 
 	leftWidth := width/2 - 1
 	rightWidth := width - leftWidth - 3
 
 	left := renderChecksPanel(status, leftWidth)
-	right := renderStatePanel(state, rightWidth)
+	right := renderStatePanel(state, diagnostics, showDiagnostics, alertIndex, rightWidth)
 
 	b.WriteString(joinColumns(left, right, leftWidth))
 	return b.String()
@@ -275,7 +338,7 @@ func joinColumns(left, right string, leftWidth int) string {
 	return b.String()
 }
 
-func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoResponse, statusUpdated, stateUpdated time.Time, width int) string {
+func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoResponse, diagnostics *netmonv1.GetDiagnosticsResponse, statusUpdated, stateUpdated time.Time, showDiagnostics bool, width int) string {
 	badge := topStyleDim.Render("● connecting...")
 
 	if status != nil {
@@ -302,25 +365,35 @@ func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoR
 		}
 	}
 
-	// Right side: version + uptime + update age + keybinds
-	var metaParts []string
+	// Right side: version + uptime + alert count + update ages.
+	// Each part is styled individually so the alert count can be highlighted
+	// independently of the surrounding dim metadata.
+	sep := topStyleDim.Render("   ")
+	var rightParts []string
 	if info != nil {
 		if v := info.GetVersion(); v != "" {
-			metaParts = append(metaParts, v)
+			rightParts = append(rightParts, topStyleDim.Render(v))
 		}
 		if ts := info.GetStartedAtUnix(); ts > 0 {
 			uptime := time.Since(time.Unix(ts, 0))
-			metaParts = append(metaParts, "up "+topFormatAge(uptime))
+			rightParts = append(rightParts, topStyleDim.Render("up "+topFormatAge(uptime)))
+		}
+	}
+	if diagnostics != nil {
+		alertStr := fmt.Sprintf("alerts %d", len(diagnostics.GetAlerts()))
+		if len(diagnostics.GetAlerts()) > 0 {
+			rightParts = append(rightParts, topStyleWarn.Render(alertStr))
+		} else {
+			rightParts = append(rightParts, topStyleDim.Render(alertStr))
 		}
 	}
 	if !statusUpdated.IsZero() {
-		metaParts = append(metaParts, "status "+topFormatAge(time.Since(statusUpdated))+" ago")
+		rightParts = append(rightParts, topStyleDim.Render("status "+topFormatAge(time.Since(statusUpdated))+" ago"))
 	}
 	if !stateUpdated.IsZero() {
-		metaParts = append(metaParts, "state "+topFormatAge(time.Since(stateUpdated))+" ago")
+		rightParts = append(rightParts, topStyleDim.Render("state "+topFormatAge(time.Since(stateUpdated))+" ago"))
 	}
-	metaParts = append(metaParts, "[r]efresh  [q]uit")
-	right := topStyleDim.Render(strings.Join(metaParts, "   "))
+	right := strings.Join(rightParts, sep)
 
 	// Build content and pad to exactly width visible characters, then apply
 	// background. We avoid passing pre-styled ANSI strings to lipgloss's
@@ -404,15 +477,22 @@ func renderChecksPanel(status *netmonv1.GetStatusResponse, width int) string {
 
 const topLabelWidth = 11
 
-func renderStatePanel(state *netmonv1.GetStateResponse, width int) string {
+func renderStatePanel(state *netmonv1.GetStateResponse, diagnostics *netmonv1.GetDiagnosticsResponse, showDiagnostics bool, alertIndex, width int) string {
 	if state == nil {
-		return topStyleDim.Render("(no data)")
+		if !showDiagnostics {
+			return topStyleDim.Render("(no data)")
+		}
+		return topStyleDim.Render("(no data)") + "\n\n" + renderTopDiagnostics(diagnostics, alertIndex, width)
 	}
 
 	var b strings.Builder
 	b.WriteString(renderTopPiHole(state.GetPihole(), width))
 	b.WriteString("\n\n")
 	b.WriteString(renderTopTailscale(state.GetTailscale(), width))
+	if showDiagnostics {
+		b.WriteString("\n\n")
+		b.WriteString(renderTopDiagnostics(diagnostics, alertIndex, width))
+	}
 	return b.String()
 }
 
@@ -554,6 +634,120 @@ func renderTopTailscale(ts *netmonv1.TailscaleState, width int) string {
 	}
 
 	return b.String()
+}
+
+func renderTopDiagnostics(diagnostics *netmonv1.GetDiagnosticsResponse, alertIndex, width int) string {
+	var b strings.Builder
+
+	b.WriteString(topStyleSection.Render("DIAGNOSTICS"))
+	b.WriteByte('\n')
+	b.WriteString(topStyleDim.Render(strings.Repeat("─", width)))
+	b.WriteByte('\n')
+
+	if diagnostics == nil {
+		b.WriteString(topStyleDim.Render("(no data)"))
+		return b.String()
+	}
+
+	alerts := topAlertsNewestFirst(diagnostics.GetAlerts())
+	if len(alerts) == 0 {
+		b.WriteString(topRow(topLabelWidth, "Alerts", "0"))
+		return b.String()
+	}
+
+	if alertIndex < 0 || alertIndex >= len(alerts) {
+		alertIndex = 0
+	}
+	alert := alerts[alertIndex]
+
+	nav := fmt.Sprintf("%d of %d", alertIndex+1, len(alerts))
+	if len(alerts) > 1 {
+		nav += "   [p]rev   [n]ext"
+	}
+	b.WriteString(topDiagRow("Alert", nav, width))
+	b.WriteByte('\n')
+
+	if ts := alert.GetAt(); ts != nil {
+		b.WriteString(topDiagRow("Time", topFormatAge(time.Since(ts.AsTime()))+" ago", width))
+		b.WriteByte('\n')
+	}
+	b.WriteString(topDiagRowStyled("Severity", topAlertSeverity(alert.GetSeverity())))
+	b.WriteByte('\n')
+	if reason := alert.GetReason(); reason != "" {
+		b.WriteString(topDiagRow("Reason", reason, width))
+		b.WriteByte('\n')
+	}
+	if summary := alert.GetSummary(); summary != "" {
+		b.WriteString(topDiagRow("Summary", summary, width))
+		b.WriteByte('\n')
+	}
+	b.WriteString(topDiagRowStyled("Delivery", topAlertDelivery(alert)))
+
+	return b.String()
+}
+
+// topDiagRow renders a diagnostics row with a plain-text value, truncated to fit.
+func topDiagRow(label, value string, width int) string {
+	valueWidth := width - topLabelWidth - 1
+	if valueWidth < 0 {
+		valueWidth = 0
+	}
+	return topRow(topLabelWidth, label, topTruncate(value, valueWidth))
+}
+
+// topDiagRowStyled renders a diagnostics row whose value is already ANSI-styled.
+// No truncation is applied because lipgloss.Width cannot measure styled strings reliably.
+func topDiagRowStyled(label, styledValue string) string {
+	return topRow(topLabelWidth, label, styledValue)
+}
+
+func renderTopFooter(showDiagnostics bool, width int) string {
+	var hint string
+	if showDiagnostics {
+		hint = "[d]hide  [p]rev  [n]ext  [r]efresh  [q]uit"
+	} else {
+		hint = "[d]iagnostics  [r]efresh  [q]uit"
+	}
+	content := hint + " "
+	pad := width - lipgloss.Width(content)
+	if pad < 0 {
+		pad = 0
+	}
+	return topStyleDim.Render(strings.Repeat(" ", pad) + content)
+}
+
+func topAlertsNewestFirst(alerts []*netmonv1.AlertAttempt) []*netmonv1.AlertAttempt {
+	out := make([]*netmonv1.AlertAttempt, 0, len(alerts))
+	for i := len(alerts) - 1; i >= 0; i-- {
+		out = append(out, alerts[i])
+	}
+	return out
+}
+
+func topAlertSeverity(severity netmonv1.Severity) string {
+	switch severity {
+	case netmonv1.Severity_SEVERITY_CRIT:
+		return topStyleCrit.Render("CRIT")
+	case netmonv1.Severity_SEVERITY_WARN:
+		return topStyleWarn.Render("WARN")
+	case netmonv1.Severity_SEVERITY_INFO:
+		return topStyleDim.Render("INFO")
+	case netmonv1.Severity_SEVERITY_OK:
+		return topStyleOK.Render("OK")
+	default:
+		return topStyleDim.Render("?")
+	}
+}
+
+func topAlertDelivery(alert *netmonv1.AlertAttempt) string {
+	switch alert.GetDeliveryStatus() {
+	case netmonv1.AlertDeliveryStatus_ALERT_DELIVERY_STATUS_DELIVERED:
+		return topStyleOK.Render("delivered")
+	case netmonv1.AlertDeliveryStatus_ALERT_DELIVERY_STATUS_NOT_DELIVERED:
+		return topStyleWarn.Render("not delivered")
+	default:
+		return topStyleDim.Render("unknown")
+	}
 }
 
 func topRow(labelWidth int, label, value string) string {

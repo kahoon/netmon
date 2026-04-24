@@ -139,6 +139,7 @@ func TestGetInfoIncludesBuildAndRuntimeMetadata(t *testing.T) {
 		PiHolePollInterval:    5 * time.Minute,
 		TailscalePollInterval: 5 * time.Minute,
 		RuntimeStatsInterval:  24 * time.Hour,
+		AlertHistoryInterval:  7 * 24 * time.Hour,
 		NtfyHost:              "ntfy.sh",
 	}
 	daemon := NewMonitor(cfg)
@@ -165,6 +166,9 @@ func TestGetInfoIncludesBuildAndRuntimeMetadata(t *testing.T) {
 	}
 	if got, want := info.TailscalePoll, 5*time.Minute; got != want {
 		t.Fatalf("GetInfo().TailscalePoll = %s, want %s", got, want)
+	}
+	if got, want := info.AlertHistoryInterval, 7*24*time.Hour; got != want {
+		t.Fatalf("GetInfo().AlertHistoryInterval = %s, want %s", got, want)
 	}
 }
 

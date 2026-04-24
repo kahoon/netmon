@@ -16,9 +16,11 @@ service NetmonService {
   rpc GetState(GetStateRequest) returns (GetStateResponse);
   rpc GetInfo(GetInfoRequest) returns (GetInfoResponse);
   rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+  rpc GetDiagnostics(GetDiagnosticsRequest) returns (GetDiagnosticsResponse);
   rpc Refresh(RefreshRequest) returns (RefreshResponse);
   rpc SetDebug(SetDebugRequest) returns (SetDebugResponse);
   rpc SetRuntimeStatsInterval(SetRuntimeStatsIntervalRequest) returns (SetRuntimeStatsIntervalResponse);
+  rpc SetAlertHistoryInterval(SetAlertHistoryIntervalRequest) returns (SetAlertHistoryIntervalResponse);
 }
 
 enum Severity {
@@ -308,6 +310,7 @@ message GetInfoResponse {
   string unbound_poll = 11;
   string pihole_poll = 12;
   string tailscale_poll = 13;
+  string alert_history_interval = 14;
 }
 
 message GetStatsRequest {}
@@ -370,6 +373,29 @@ message GetStatsResponse {
   TraceCounters traces = 9;
 }
 
+enum AlertDeliveryStatus {
+  ALERT_DELIVERY_STATUS_UNSPECIFIED = 0;
+  ALERT_DELIVERY_STATUS_DELIVERED = 1;
+  ALERT_DELIVERY_STATUS_NOT_DELIVERED = 2;
+}
+
+message AlertAttempt {
+  google.protobuf.Timestamp at = 1;
+  AlertDeliveryStatus delivery_status = 2;
+  Severity severity = 3;
+  string title = 4;
+  string reason = 5;
+  string summary = 6;
+  string delivery_error = 7;
+}
+
+message GetDiagnosticsRequest {}
+
+message GetDiagnosticsResponse {
+  string alert_history_interval = 1;
+  repeated AlertAttempt alerts = 2;
+}
+
 message RefreshRequest {
   RefreshScope scope = 1;
 }
@@ -381,6 +407,14 @@ message SetRuntimeStatsIntervalRequest {
 }
 
 message SetRuntimeStatsIntervalResponse {
+  google.protobuf.Duration interval = 1;
+}
+
+message SetAlertHistoryIntervalRequest {
+  google.protobuf.Duration interval = 1;
+}
+
+message SetAlertHistoryIntervalResponse {
   google.protobuf.Duration interval = 1;
 }
 

@@ -39,6 +39,7 @@ type Info struct {
 	PiHolePoll           time.Duration
 	TailscalePoll        time.Duration
 	RuntimeStatsInterval time.Duration
+	AlertHistoryInterval time.Duration
 	NtfyHost             string
 }
 

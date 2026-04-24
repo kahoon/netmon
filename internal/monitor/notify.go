@@ -17,6 +17,8 @@ type Notification struct {
 	Severity model.Severity
 	Title    string
 	Body     string
+	Reason   string
+	Summary  string
 }
 
 type NtfyNotifier struct {
@@ -134,6 +136,8 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 		Severity: severity,
 		Title:    fmt.Sprintf("%s netmon %s", severity.String(), cfg.MonitorInterface),
 		Body:     strings.Join(bodyLines, "\n"),
+		Reason:   reason,
+		Summary:  alertSummary(lines),
 	}
 }
 
@@ -150,6 +154,8 @@ func BuildErrorNotification(cfg config.Config, reason string, err error) Notific
 		Severity: severity,
 		Title:    fmt.Sprintf("%s netmon %s", severity.String(), cfg.MonitorInterface),
 		Body:     strings.Join(lines, "\n"),
+		Reason:   reason,
+		Summary:  "monitor refresh failed: " + err.Error(),
 	}
 }
 

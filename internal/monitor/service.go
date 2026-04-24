@@ -22,10 +22,12 @@ type Service interface {
 	GetState(ctx context.Context) (SystemState, error)
 	GetInfo(ctx context.Context) (Info, error)
 	GetStats(ctx context.Context) (StatsSnapshot, error)
+	GetDiagnostics(ctx context.Context) (Diagnostics, error)
 	Refresh(ctx context.Context, scope RefreshScope) error
 	Trace(ctx context.Context, scope RefreshScope, sink trace.Sink) error
 	SetDebug(ctx context.Context, debug bool) error
 	SetRuntimeStatsInterval(ctx context.Context, interval time.Duration) error
+	SetAlertHistoryInterval(ctx context.Context, interval time.Duration) error
 }
 
 func (m *Monitor) GetStatus(_ context.Context) (StatusView, error) {
@@ -58,6 +60,7 @@ func (m *Monitor) GetState(_ context.Context) (model.SystemState, error) {
 func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 	m.mu.Lock()
 	runtimeStatsInterval := m.runtimeStatsInterval
+	alertHistoryInterval := m.alertHistoryInterval
 	m.mu.Unlock()
 
 	return Info{
@@ -73,12 +76,17 @@ func (m *Monitor) GetInfo(_ context.Context) (Info, error) {
 		PiHolePoll:           m.cfg.PiHolePollInterval,
 		TailscalePoll:        m.cfg.TailscalePollInterval,
 		RuntimeStatsInterval: runtimeStatsInterval,
+		AlertHistoryInterval: alertHistoryInterval,
 		NtfyHost:             m.cfg.NtfyHost,
 	}, nil
 }
 
 func (m *Monitor) GetStats(_ context.Context) (stats.Snapshot, error) {
 	return m.stats.Snapshot(), nil
+}
+
+func (m *Monitor) GetDiagnostics(_ context.Context) (Diagnostics, error) {
+	return m.alertHistory.Snapshot(time.Now().Local()), nil
 }
 
 func (m *Monitor) Refresh(ctx context.Context, scope RefreshScope) error {
@@ -209,6 +217,24 @@ func (m *Monitor) SetRuntimeStatsInterval(_ context.Context, interval time.Durat
 		return nil
 	}
 	log.Printf("runtime stats interval updated to %s", interval)
+	return nil
+}
+
+func (m *Monitor) SetAlertHistoryInterval(_ context.Context, interval time.Duration) error {
+	if interval < 0 {
+		return fmt.Errorf("alert history interval must be >= 0")
+	}
+
+	m.mu.Lock()
+	m.alertHistoryInterval = interval
+	m.mu.Unlock()
+
+	m.alertHistory.SetInterval(interval, time.Now().Local())
+	if interval == 0 {
+		log.Print("alert history disabled")
+		return nil
+	}
+	log.Printf("alert history interval updated to %s", interval)
 	return nil
 }
 

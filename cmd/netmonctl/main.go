@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -288,6 +289,7 @@ func runInfo(spec commandSpec, args []string) {
 	fmt.Printf("Pi-hole Poll:       %s\n", resp.Msg.GetPiholePoll())
 	fmt.Printf("Tailscale Poll:     %s\n", resp.Msg.GetTailscalePoll())
 	fmt.Printf("Runtime Stats:      %s\n", resp.Msg.GetRuntimeStatsInterval())
+	fmt.Printf("Alert History:      %s\n", resp.Msg.GetAlertHistoryInterval())
 	fmt.Printf("Notify Host:        %s\n", resp.Msg.GetNtfyHost())
 	fmt.Printf("RPC Socket:         %s\n", cmd.socketPath)
 }
@@ -342,19 +344,31 @@ func runSet(spec commandSpec, args []string) {
 		}
 		fmt.Printf("%s = %s\n", setting, input)
 	case "runtime-stats-interval":
-		interval, err := time.ParseDuration(rest[1])
+		interval, err := parseCommandDuration(rest[1])
 		if err != nil {
 			log.Fatalf("invalid duration %q: %v", rest[1], err)
 		}
 
-		resp, err := cmd.client.SetRuntimeStatsInterval(cmd.ctx, connect.NewRequest(&netmonv1.SetRuntimeStatsIntervalRequest{
+		_, err = cmd.client.SetRuntimeStatsInterval(cmd.ctx, connect.NewRequest(&netmonv1.SetRuntimeStatsIntervalRequest{
 			Interval: durationpb.New(interval),
 		}))
 		if err != nil {
 			fatalRPC(err, cmd.socketPath)
 		}
-		applied := resp.Msg.GetInterval().AsDuration()
-		fmt.Printf("%s = %s\n", setting, applied)
+		fmt.Printf("%s = %s\n", setting, strings.TrimSpace(rest[1]))
+	case "alert-history-interval":
+		interval, err := parseCommandDuration(rest[1])
+		if err != nil {
+			log.Fatalf("invalid duration %q: %v", rest[1], err)
+		}
+
+		_, err = cmd.client.SetAlertHistoryInterval(cmd.ctx, connect.NewRequest(&netmonv1.SetAlertHistoryIntervalRequest{
+			Interval: durationpb.New(interval),
+		}))
+		if err != nil {
+			fatalRPC(err, cmd.socketPath)
+		}
+		fmt.Printf("%s = %s\n", setting, strings.TrimSpace(rest[1]))
 	default:
 		log.Fatalf("unknown setting %q", rest[0])
 	}
@@ -916,6 +930,20 @@ func formatDuration(d time.Duration) string {
 		d = 0
 	}
 	return d.Truncate(time.Second).String()
+}
+
+func parseCommandDuration(value string) (time.Duration, error) {
+	if parsed, err := time.ParseDuration(value); err == nil {
+		return parsed, nil
+	} else if days, ok := strings.CutSuffix(strings.TrimSpace(value), "d"); ok {
+		n, parseErr := strconv.ParseFloat(strings.TrimSpace(days), 64)
+		if parseErr != nil {
+			return 0, parseErr
+		}
+		return time.Duration(n * float64(24*time.Hour)), nil
+	} else {
+		return 0, err
+	}
 }
 
 func formatTaskEventKind(kind netmonv1.TaskEventKind) string {
