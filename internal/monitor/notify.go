@@ -141,24 +141,6 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 	}
 }
 
-func BuildErrorNotification(cfg config.Config, reason string, err error) Notification {
-	severity := model.SeverityWarn
-	lines := []string{
-		"reason: " + reason,
-		"severity: " + severity.String(),
-		"changed:",
-		"- monitor refresh failed: " + err.Error(),
-	}
-
-	return Notification{
-		Severity: severity,
-		Title:    fmt.Sprintf("%s netmon %s", severity.String(), cfg.MonitorInterface),
-		Body:     strings.Join(lines, "\n"),
-		Reason:   reason,
-		Summary:  "monitor refresh failed: " + err.Error(),
-	}
-}
-
 func changedCheckLines(previousChecks, currentChecks model.CheckSet) []string {
 	lines := make([]string, 0, len(model.CheckOrder()))
 	for _, key := range model.CheckOrder() {

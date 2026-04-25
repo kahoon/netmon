@@ -69,13 +69,14 @@ func (r CheckResult) Equal(other CheckResult) bool {
 type CheckSet map[string]CheckResult
 
 type InterfaceState struct {
-	LinkIndex int
-	IfName    string
-	LinkUp    bool
-	OperState string
-	ULA       []string
-	GUA       []string
-	UsableGUA []string
+	LinkIndex       int
+	IfName          string
+	LinkUp          bool
+	OperState       string
+	ULA             []string
+	GUA             []string
+	UsableGUA       []string
+	CollectionError string
 }
 
 type ListenerState struct {
@@ -83,6 +84,7 @@ type ListenerState struct {
 	DNS53UDP        SocketProbe
 	Resolver5335TCP SocketProbe
 	Resolver5335UDP SocketProbe
+	CollectionError string
 }
 
 type DNSProbeStatus string

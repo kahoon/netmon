@@ -83,7 +83,11 @@ func TestGetStateReturnsCopy(t *testing.T) {
 	daemon := NewMonitor(config.Config{})
 	daemon.state = model.SystemState{
 		Interface: model.InterfaceState{
-			ULA: []string{"fd00::1"},
+			ULA:             []string{"fd00::1"},
+			CollectionError: "netlink failed",
+		},
+		Listeners: model.ListenerState{
+			CollectionError: "listener failed",
 		},
 		Unbound: model.UnboundState{
 			DNSSEC: model.DNSSECProbeResult{
@@ -111,12 +115,20 @@ func TestGetStateReturnsCopy(t *testing.T) {
 	}
 
 	state.Interface.ULA[0] = "fd00::2"
+	state.Interface.CollectionError = "changed"
+	state.Listeners.CollectionError = "changed"
 	state.Unbound.DNSSEC.Positive.Name = "changed"
 	state.PiHole.Upstreams.Servers[0] = "8.8.8.8#53"
 	state.Tailscale.Roles.AdvertisedRoutes[0] = "10.0.0.0/24"
 
 	if got, want := daemon.state.Interface.ULA[0], "fd00::1"; got != want {
 		t.Fatalf("monitor state mutated through GetState() copy: got %q want %q", got, want)
+	}
+	if got, want := daemon.state.Interface.CollectionError, "netlink failed"; got != want {
+		t.Fatalf("monitor interface collection error mutated through GetState() copy: got %q want %q", got, want)
+	}
+	if got, want := daemon.state.Listeners.CollectionError, "listener failed"; got != want {
+		t.Fatalf("monitor listener collection error mutated through GetState() copy: got %q want %q", got, want)
 	}
 	if got, want := daemon.state.Unbound.DNSSEC.Positive.Name, "internetsociety.org."; got != want {
 		t.Fatalf("monitor unbound state mutated through GetState() copy: got %q want %q", got, want)

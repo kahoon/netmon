@@ -69,6 +69,40 @@ func TestEvaluateChecksIncludesInterfaceOperationalCheck(t *testing.T) {
 	}
 }
 
+func TestCollectionChecks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("interface collection failure warns", func(t *testing.T) {
+		t.Parallel()
+
+		got := interfaceCollectionCheck(InterfaceState{CollectionError: "netlink unavailable"})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+		if got.Summary != "interface collection failed" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "interface collection failed")
+		}
+		if got.Detail != "netlink unavailable" {
+			t.Fatalf("Detail = %q, want %q", got.Detail, "netlink unavailable")
+		}
+	})
+
+	t.Run("listener collection failure warns", func(t *testing.T) {
+		t.Parallel()
+
+		got := listenerCollectionCheck(ListenerState{CollectionError: "open /proc/net/tcp: permission denied"})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+		if got.Summary != "listener collection failed" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "listener collection failed")
+		}
+		if got.Detail != "open /proc/net/tcp: permission denied" {
+			t.Fatalf("Detail = %q, want %q", got.Detail, "open /proc/net/tcp: permission denied")
+		}
+	})
+}
+
 func TestDNSSECValidationCheck(t *testing.T) {
 	t.Parallel()
 

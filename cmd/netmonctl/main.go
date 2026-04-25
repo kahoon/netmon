@@ -506,9 +506,15 @@ func printState(resp *netmonv1.GetStateResponse) {
 	fmt.Printf("  ULA:         %s\n", joinOrNone(iface.GetUla()))
 	fmt.Printf("  GUA:         %s\n", joinOrNone(iface.GetGua()))
 	fmt.Printf("  Usable GUA:  %s\n", joinOrNone(iface.GetUsableGua()))
+	if err := iface.GetCollectionError(); err != "" {
+		fmt.Printf("  Collection:  %s\n", err)
+	}
 
 	fmt.Println()
 	fmt.Println("Listeners")
+	if err := resp.GetListeners().GetCollectionError(); err != "" {
+		fmt.Printf("  Collection: %s\n", err)
+	}
 	printListenerBinding("53/tcp", resp.GetListeners().GetDns53Tcp())
 	printListenerBinding("53/udp", resp.GetListeners().GetDns53Udp())
 	printListenerBinding("5335/tcp", resp.GetListeners().GetResolver5335Tcp())

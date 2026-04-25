@@ -135,6 +135,7 @@ message InterfaceState {
   repeated string ula = 5;
   repeated string gua = 6;
   repeated string usable_gua = 7;
+  string collection_error = 8;
 }
 
 message ListenerBinding {
@@ -150,6 +151,7 @@ message ListenerState {
   ListenerBinding dns53_udp = 2;
   ListenerBinding resolver5335_tcp = 3;
   ListenerBinding resolver5335_udp = 4;
+  string collection_error = 5;
 }
 
 message DnsProbeResult {

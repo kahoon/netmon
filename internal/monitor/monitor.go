@@ -166,7 +166,10 @@ func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
 		return m.interfaceCollector.Collect(m.cfg.MonitorInterface)
 	})
 	if err != nil {
-		m.notifyError(ctx, reason, err)
+		state = m.interfaceStateWithCollectionError(err)
+		m.applyUpdate(ctx, reason, func(current *model.SystemState) {
+			current.Interface = state
+		})
 		return err
 	}
 
@@ -183,7 +186,10 @@ func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
 		return m.listenerCollector.Collect()
 	})
 	if err != nil {
-		m.notifyError(ctx, reason, err)
+		state = m.listenerStateWithCollectionError(err)
+		m.applyUpdate(ctx, reason, func(current *model.SystemState) {
+			current.Listeners = state
+		})
 		return err
 	}
 
@@ -192,6 +198,24 @@ func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
 	})
 
 	return nil
+}
+
+func (m *Monitor) interfaceStateWithCollectionError(err error) model.InterfaceState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state := m.state.Interface
+	state.CollectionError = err.Error()
+	return state
+}
+
+func (m *Monitor) listenerStateWithCollectionError(err error) model.ListenerState {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state := m.state.Listeners
+	state.CollectionError = err.Error()
+	return state
 }
 
 func (m *Monitor) RefreshUpstream(ctx context.Context, reason string) error {
@@ -331,31 +355,6 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 	log.Printf("notification sent: %s", note.Title)
 	now := time.Now().Local()
 	m.recordAlertAttempt(*note, true, nil, now)
-	events.Emit(ctx, events.NotificationSent{
-		At:       now,
-		Title:    note.Title,
-		Severity: note.Severity.String(),
-	})
-}
-
-func (m *Monitor) notifyError(ctx context.Context, reason string, err error) {
-	ctx = events.WithHub(ctx, m.bus)
-	log.Printf("%s failed: %v", reason, err)
-	note := BuildErrorNotification(m.cfg, reason, err)
-	if notifyErr := m.notifier.Send(ctx, note); notifyErr != nil {
-		log.Printf("notify failed: %v", notifyErr)
-		now := time.Now().Local()
-		m.recordAlertAttempt(note, false, notifyErr, now)
-		events.Emit(ctx, events.NotificationFailed{
-			At:    now,
-			Error: notifyErr.Error(),
-		})
-		return
-	}
-
-	log.Printf("notification sent: %s", note.Title)
-	now := time.Now().Local()
-	m.recordAlertAttempt(note, true, nil, now)
 	events.Emit(ctx, events.NotificationSent{
 		At:       now,
 		Title:    note.Title,

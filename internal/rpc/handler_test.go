@@ -188,6 +188,12 @@ func TestGetStateMapsPiHoleAndUnboundState(t *testing.T) {
 	handler := &Handler{
 		svc: &fakeService{
 			state: model.SystemState{
+				Interface: model.InterfaceState{
+					CollectionError: "netlink failed",
+				},
+				Listeners: model.ListenerState{
+					CollectionError: "listener failed",
+				},
 				Unbound: model.UnboundState{
 					DNSSEC: model.DNSSECProbeResult{
 						Positive: model.DNSSECProbeAttempt{
@@ -265,6 +271,12 @@ func TestGetStateMapsPiHoleAndUnboundState(t *testing.T) {
 
 	if got, want := resp.Msg.GetUnbound().GetDnssec().GetPositive().GetName(), "internetsociety.org."; got != want {
 		t.Fatalf("GetState().Unbound.Dnssec.Positive.Name = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetInterface().GetCollectionError(), "netlink failed"; got != want {
+		t.Fatalf("GetState().Interface.CollectionError = %q, want %q", got, want)
+	}
+	if got, want := resp.Msg.GetListeners().GetCollectionError(), "listener failed"; got != want {
+		t.Fatalf("GetState().Listeners.CollectionError = %q, want %q", got, want)
 	}
 	if got, want := resp.Msg.GetUnbound().GetDnssec().GetPositive().GetAd(), true; got != want {
 		t.Fatalf("GetState().Unbound.Dnssec.Positive.Ad = %t, want %t", got, want)

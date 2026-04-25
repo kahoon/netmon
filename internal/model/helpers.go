@@ -39,19 +39,21 @@ func CopyCheckSet(in CheckSet) CheckSet {
 func CopySystemState(in SystemState) SystemState {
 	return SystemState{
 		Interface: InterfaceState{
-			LinkIndex: in.Interface.LinkIndex,
-			IfName:    in.Interface.IfName,
-			LinkUp:    in.Interface.LinkUp,
-			OperState: in.Interface.OperState,
-			ULA:       append([]string{}, in.Interface.ULA...),
-			GUA:       append([]string{}, in.Interface.GUA...),
-			UsableGUA: append([]string{}, in.Interface.UsableGUA...),
+			LinkIndex:       in.Interface.LinkIndex,
+			IfName:          in.Interface.IfName,
+			LinkUp:          in.Interface.LinkUp,
+			OperState:       in.Interface.OperState,
+			ULA:             append([]string{}, in.Interface.ULA...),
+			GUA:             append([]string{}, in.Interface.GUA...),
+			UsableGUA:       append([]string{}, in.Interface.UsableGUA...),
+			CollectionError: in.Interface.CollectionError,
 		},
 		Listeners: ListenerState{
 			DNS53TCP:        copySocketProbe(in.Listeners.DNS53TCP),
 			DNS53UDP:        copySocketProbe(in.Listeners.DNS53UDP),
 			Resolver5335TCP: copySocketProbe(in.Listeners.Resolver5335TCP),
 			Resolver5335UDP: copySocketProbe(in.Listeners.Resolver5335UDP),
+			CollectionError: in.Listeners.CollectionError,
 		},
 		Upstream: UpstreamState{
 			RootDNSV4:      in.Upstream.RootDNSV4,

@@ -150,19 +150,21 @@ func (h *Handler) GetState(ctx context.Context, _ *connect.Request[netmonv1.GetS
 
 	return connect.NewResponse(&netmonv1.GetStateResponse{
 		Interface: &netmonv1.InterfaceState{
-			Name:      state.Interface.IfName,
-			LinkIndex: int32(state.Interface.LinkIndex),
-			LinkUp:    state.Interface.LinkUp,
-			OperState: state.Interface.OperState,
-			Ula:       slices.Clone(state.Interface.ULA),
-			Gua:       slices.Clone(state.Interface.GUA),
-			UsableGua: slices.Clone(state.Interface.UsableGUA),
+			Name:            state.Interface.IfName,
+			LinkIndex:       int32(state.Interface.LinkIndex),
+			LinkUp:          state.Interface.LinkUp,
+			OperState:       state.Interface.OperState,
+			Ula:             slices.Clone(state.Interface.ULA),
+			Gua:             slices.Clone(state.Interface.GUA),
+			UsableGua:       slices.Clone(state.Interface.UsableGUA),
+			CollectionError: state.Interface.CollectionError,
 		},
 		Listeners: &netmonv1.ListenerState{
 			Dns53Tcp:        mapSocketProbe(state.Listeners.DNS53TCP),
 			Dns53Udp:        mapSocketProbe(state.Listeners.DNS53UDP),
 			Resolver5335Tcp: mapSocketProbe(state.Listeners.Resolver5335TCP),
 			Resolver5335Udp: mapSocketProbe(state.Listeners.Resolver5335UDP),
+			CollectionError: state.Listeners.CollectionError,
 		},
 		Upstream: &netmonv1.UpstreamState{
 			RootV4:      mapDNSProbe(state.Upstream.RootDNSV4),

@@ -8,30 +8,34 @@ import (
 )
 
 const (
-	checkInterfaceOper   = "interface-oper"
-	checkExpectedULA     = "expected-ula"
-	checkUsableGUA       = "usable-gua"
-	checkDNS53TCP        = "dns53-tcp"
-	checkDNS53UDP        = "dns53-udp"
-	checkResolver5335TCP = "resolver5335-tcp"
-	checkResolver5335UDP = "resolver5335-udp"
-	checkExpose5335TCP   = "resolver5335-exposed-tcp"
-	checkExpose5335UDP   = "resolver5335-exposed-udp"
-	checkExternalDNSV4   = "external-dns-v4"
-	checkExternalDNSV6   = "external-dns-v6"
-	checkDNSSEC          = "dnssec-validation"
-	checkPiHoleDNSV4     = "pihole-dns-v4"
-	checkPiHoleDNSV6     = "pihole-dns-v6"
-	checkPiHoleBlocking  = "pihole-blocking"
-	checkPiHoleUpstreams = "pihole-upstreams"
-	checkPiHoleGravity   = "pihole-gravity"
-	checkTailscale       = "tailscale-connected"
+	checkInterfaceCollection = "interface-collection"
+	checkInterfaceOper       = "interface-oper"
+	checkExpectedULA         = "expected-ula"
+	checkUsableGUA           = "usable-gua"
+	checkListenerCollection  = "listener-collection"
+	checkDNS53TCP            = "dns53-tcp"
+	checkDNS53UDP            = "dns53-udp"
+	checkResolver5335TCP     = "resolver5335-tcp"
+	checkResolver5335UDP     = "resolver5335-udp"
+	checkExpose5335TCP       = "resolver5335-exposed-tcp"
+	checkExpose5335UDP       = "resolver5335-exposed-udp"
+	checkExternalDNSV4       = "external-dns-v4"
+	checkExternalDNSV6       = "external-dns-v6"
+	checkDNSSEC              = "dnssec-validation"
+	checkPiHoleDNSV4         = "pihole-dns-v4"
+	checkPiHoleDNSV6         = "pihole-dns-v6"
+	checkPiHoleBlocking      = "pihole-blocking"
+	checkPiHoleUpstreams     = "pihole-upstreams"
+	checkPiHoleGravity       = "pihole-gravity"
+	checkTailscale           = "tailscale-connected"
 )
 
 var checkOrder = []string{
+	checkInterfaceCollection,
 	checkInterfaceOper,
 	checkExpectedULA,
 	checkUsableGUA,
+	checkListenerCollection,
 	checkDNS53TCP,
 	checkDNS53UDP,
 	checkResolver5335TCP,
@@ -51,9 +55,11 @@ var checkOrder = []string{
 
 func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	checks := make(CheckSet, len(checkOrder))
+	addCheck(checks, interfaceCollectionCheck(state.Interface))
 	addCheck(checks, interfaceOperationalCheck(state))
 	addCheck(checks, expectedULACheck(expectedULA, state))
 	addCheck(checks, usableGUACheck(state))
+	addCheck(checks, listenerCollectionCheck(state.Listeners))
 	addCheck(checks, dnsCoverageCheck(checkDNS53TCP, "53/tcp", state.Listeners.DNS53TCP))
 	addCheck(checks, dnsCoverageCheck(checkDNS53UDP, "53/udp", state.Listeners.DNS53UDP))
 	addCheck(checks, localhostCheck(checkResolver5335TCP, "5335/tcp", state.Listeners.Resolver5335TCP))
@@ -126,6 +132,23 @@ func interfaceOperationalCheck(state SystemState) CheckResult {
 	return result
 }
 
+func interfaceCollectionCheck(state InterfaceState) CheckResult {
+	result := CheckResult{
+		Key:      checkInterfaceCollection,
+		Label:    "interface collection",
+		Severity: SeverityOK,
+	}
+
+	if state.CollectionError == "" {
+		return result
+	}
+
+	result.Severity = SeverityWarn
+	result.Summary = "interface collection failed"
+	result.Detail = state.CollectionError
+	return result
+}
+
 func addCheck(checks CheckSet, result CheckResult) {
 	checks[result.Key] = result
 }
@@ -160,6 +183,23 @@ func usableGUACheck(state SystemState) CheckResult {
 
 	result.Severity = SeverityWarn
 	result.Summary = "no usable global IPv6"
+	return result
+}
+
+func listenerCollectionCheck(state ListenerState) CheckResult {
+	result := CheckResult{
+		Key:      checkListenerCollection,
+		Label:    "listener collection",
+		Severity: SeverityOK,
+	}
+
+	if state.CollectionError == "" {
+		return result
+	}
+
+	result.Severity = SeverityWarn
+	result.Summary = "listener collection failed"
+	result.Detail = state.CollectionError
 	return result
 }
 

@@ -1073,16 +1073,17 @@ func (*GetStateRequest) Descriptor() ([]byte, []int) {
 }
 
 type InterfaceState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	LinkIndex     int32                  `protobuf:"varint,2,opt,name=link_index,json=linkIndex,proto3" json:"link_index,omitempty"`
-	LinkUp        bool                   `protobuf:"varint,3,opt,name=link_up,json=linkUp,proto3" json:"link_up,omitempty"`
-	OperState     string                 `protobuf:"bytes,4,opt,name=oper_state,json=operState,proto3" json:"oper_state,omitempty"`
-	Ula           []string               `protobuf:"bytes,5,rep,name=ula,proto3" json:"ula,omitempty"`
-	Gua           []string               `protobuf:"bytes,6,rep,name=gua,proto3" json:"gua,omitempty"`
-	UsableGua     []string               `protobuf:"bytes,7,rep,name=usable_gua,json=usableGua,proto3" json:"usable_gua,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Name            string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	LinkIndex       int32                  `protobuf:"varint,2,opt,name=link_index,json=linkIndex,proto3" json:"link_index,omitempty"`
+	LinkUp          bool                   `protobuf:"varint,3,opt,name=link_up,json=linkUp,proto3" json:"link_up,omitempty"`
+	OperState       string                 `protobuf:"bytes,4,opt,name=oper_state,json=operState,proto3" json:"oper_state,omitempty"`
+	Ula             []string               `protobuf:"bytes,5,rep,name=ula,proto3" json:"ula,omitempty"`
+	Gua             []string               `protobuf:"bytes,6,rep,name=gua,proto3" json:"gua,omitempty"`
+	UsableGua       []string               `protobuf:"bytes,7,rep,name=usable_gua,json=usableGua,proto3" json:"usable_gua,omitempty"`
+	CollectionError string                 `protobuf:"bytes,8,opt,name=collection_error,json=collectionError,proto3" json:"collection_error,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *InterfaceState) Reset() {
@@ -1162,6 +1163,13 @@ func (x *InterfaceState) GetUsableGua() []string {
 		return x.UsableGua
 	}
 	return nil
+}
+
+func (x *InterfaceState) GetCollectionError() string {
+	if x != nil {
+		return x.CollectionError
+	}
+	return ""
 }
 
 type ListenerBinding struct {
@@ -1246,6 +1254,7 @@ type ListenerState struct {
 	Dns53Udp        *ListenerBinding       `protobuf:"bytes,2,opt,name=dns53_udp,json=dns53Udp,proto3" json:"dns53_udp,omitempty"`
 	Resolver5335Tcp *ListenerBinding       `protobuf:"bytes,3,opt,name=resolver5335_tcp,json=resolver5335Tcp,proto3" json:"resolver5335_tcp,omitempty"`
 	Resolver5335Udp *ListenerBinding       `protobuf:"bytes,4,opt,name=resolver5335_udp,json=resolver5335Udp,proto3" json:"resolver5335_udp,omitempty"`
+	CollectionError string                 `protobuf:"bytes,5,opt,name=collection_error,json=collectionError,proto3" json:"collection_error,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1306,6 +1315,13 @@ func (x *ListenerState) GetResolver5335Udp() *ListenerBinding {
 		return x.Resolver5335Udp
 	}
 	return nil
+}
+
+func (x *ListenerState) GetCollectionError() string {
+	if x != nil {
+		return x.CollectionError
+	}
+	return ""
 }
 
 type DnsProbeResult struct {
@@ -4001,7 +4017,7 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"<\n" +
 	"\rTraceResponse\x12+\n" +
 	"\x05event\x18\x01 \x01(\v2\x15.netmon.v1.TraceEventR\x05event\"\x11\n" +
-	"\x0fGetStateRequest\"\xbe\x01\n" +
+	"\x0fGetStateRequest\"\xe9\x01\n" +
 	"\x0eInterfaceState\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
 	"\n" +
@@ -4012,18 +4028,20 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\x03ula\x18\x05 \x03(\tR\x03ula\x12\x10\n" +
 	"\x03gua\x18\x06 \x03(\tR\x03gua\x12\x1d\n" +
 	"\n" +
-	"usable_gua\x18\a \x03(\tR\tusableGua\"\x8e\x01\n" +
+	"usable_gua\x18\a \x03(\tR\tusableGua\x12)\n" +
+	"\x10collection_error\x18\b \x01(\tR\x0fcollectionError\"\x8e\x01\n" +
 	"\x0fListenerBinding\x12\x10\n" +
 	"\x03any\x18\x01 \x01(\bR\x03any\x12\x12\n" +
 	"\x04ipv4\x18\x02 \x01(\bR\x04ipv4\x12\x12\n" +
 	"\x04ipv6\x18\x03 \x01(\bR\x04ipv6\x12#\n" +
 	"\rloopback_only\x18\x04 \x01(\bR\floopbackOnly\x12\x1c\n" +
-	"\taddresses\x18\x05 \x03(\tR\taddresses\"\x8f\x02\n" +
+	"\taddresses\x18\x05 \x03(\tR\taddresses\"\xba\x02\n" +
 	"\rListenerState\x127\n" +
 	"\tdns53_tcp\x18\x01 \x01(\v2\x1a.netmon.v1.ListenerBindingR\bdns53Tcp\x127\n" +
 	"\tdns53_udp\x18\x02 \x01(\v2\x1a.netmon.v1.ListenerBindingR\bdns53Udp\x12E\n" +
 	"\x10resolver5335_tcp\x18\x03 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Tcp\x12E\n" +
-	"\x10resolver5335_udp\x18\x04 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Udp\"\xa1\x01\n" +
+	"\x10resolver5335_udp\x18\x04 \x01(\v2\x1a.netmon.v1.ListenerBindingR\x0fresolver5335Udp\x12)\n" +
+	"\x10collection_error\x18\x05 \x01(\tR\x0fcollectionError\"\xa1\x01\n" +
 	"\x0eDnsProbeResult\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x16\n" +
