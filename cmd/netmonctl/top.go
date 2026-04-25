@@ -275,11 +275,11 @@ func runTop(spec commandSpec, args []string) {
 			case 'd', 'D':
 				store.toggleDiagnostics()
 				drawTop(fd, store)
+			case 'o', 'O':
+				store.moveAlert(1)
+				drawTop(fd, store)
 			case 'n', 'N':
 				store.moveAlert(-1)
-				drawTop(fd, store)
-			case 'p', 'P':
-				store.moveAlert(1)
 				drawTop(fd, store)
 			}
 		case <-stateTicker.C:
@@ -662,7 +662,7 @@ func renderTopDiagnostics(diagnostics *netmonv1.GetDiagnosticsResponse, alertInd
 
 	nav := fmt.Sprintf("%d of %d", alertIndex+1, len(alerts))
 	if len(alerts) > 1 {
-		nav += "   [p]rev   [n]ext"
+		nav += "   [o]lder   [n]ewer"
 	}
 	b.WriteString(topDiagRow("Alert", nav, width))
 	b.WriteByte('\n')
@@ -704,11 +704,11 @@ func topDiagRowStyled(label, styledValue string) string {
 func renderTopFooter(showDiagnostics bool, width int) string {
 	var hint string
 	if showDiagnostics {
-		hint = "[d]hide  [p]rev  [n]ext  [r]efresh  [q]uit"
+		hint = "[d]hide  [o]lder  [n]ewer  [r]efresh  [q]uit"
 	} else {
 		hint = "[d]iagnostics  [r]efresh  [q]uit"
 	}
-	content := hint + " "
+	content := topTruncate(hint+" ", width)
 	pad := width - lipgloss.Width(content)
 	if pad < 0 {
 		pad = 0

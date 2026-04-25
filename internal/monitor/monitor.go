@@ -36,9 +36,9 @@ type Monitor struct {
 	runtimeStatsInterval time.Duration
 	alertHistoryInterval time.Duration
 
-	bus          *events.Hub
-	stats        *stats.Recorder
-	alertHistory *alertHistory
+	bus    *events.Hub
+	stats  *stats.Recorder
+	alerts *alerts
 }
 
 func NewMonitor(cfg config.Config) *Monitor {
@@ -80,8 +80,8 @@ func NewMonitor(cfg config.Config) *Monitor {
 				History: 64,
 			},
 		),
-		stats:        recorder,
-		alertHistory: newAlertHistory(cfg.AlertHistoryInterval),
+		stats:  recorder,
+		alerts: newAlerts(cfg.AlertHistoryInterval),
 	}
 	// Initialize the pending manager with a telemetry implementation that reports to the monitor's logger.
 	// This allows us to track pending operations and their durations.
@@ -151,7 +151,7 @@ func (m *Monitor) recordAlertAttempt(note Notification, delivered bool, delivery
 			attempt.DeliveryError = deliveryErr.Error()
 		}
 	}
-	m.alertHistory.Record(attempt)
+	m.alerts.Record(attempt)
 }
 
 func (m *Monitor) CurrentLinkIndex() int {

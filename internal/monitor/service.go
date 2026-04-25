@@ -86,7 +86,7 @@ func (m *Monitor) GetStats(_ context.Context) (stats.Snapshot, error) {
 }
 
 func (m *Monitor) GetDiagnostics(_ context.Context) (Diagnostics, error) {
-	return m.alertHistory.Snapshot(time.Now().Local()), nil
+	return m.alerts.Snapshot(time.Now().Local()), nil
 }
 
 func (m *Monitor) Refresh(ctx context.Context, scope RefreshScope) error {
@@ -229,7 +229,7 @@ func (m *Monitor) SetAlertHistoryInterval(_ context.Context, interval time.Durat
 	m.alertHistoryInterval = interval
 	m.mu.Unlock()
 
-	m.alertHistory.SetInterval(interval, time.Now().Local())
+	m.alerts.SetInterval(interval, time.Now().Local())
 	if interval == 0 {
 		log.Print("alert history disabled")
 		return nil

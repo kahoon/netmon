@@ -37,25 +37,25 @@ type Diagnostics struct {
 	Alerts               []AlertAttempt
 }
 
-type alertHistory struct {
+type alerts struct {
 	mu       sync.Mutex
 	interval time.Duration
 	attempts *ring.Queue[AlertAttempt]
 }
 
-func newAlertHistory(interval time.Duration) *alertHistory {
-	return &alertHistory{
+func newAlerts(interval time.Duration) *alerts {
+	return &alerts{
 		interval: interval,
 		attempts: ring.New[AlertAttempt](ring.WithMinCapacity[AlertAttempt](alertHistoryCapacity)),
 	}
 }
 
-func (h *alertHistory) Record(attempt AlertAttempt) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (a *alerts) Record(attempt AlertAttempt) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	h.pruneLocked(attempt.At)
-	if h.interval == 0 {
+	a.pruneLocked(attempt.At)
+	if a.interval == 0 {
 		return
 	}
 
@@ -63,49 +63,49 @@ func (h *alertHistory) Record(attempt AlertAttempt) {
 	attempt.Reason = truncateAlertField(attempt.Reason)
 	attempt.Summary = truncateAlertField(attempt.Summary)
 	attempt.DeliveryError = truncateAlertField(attempt.DeliveryError)
-	h.attempts.Push(attempt)
+	a.attempts.Push(attempt)
 }
 
-func (h *alertHistory) Snapshot(now time.Time) Diagnostics {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (a *alerts) Snapshot(now time.Time) Diagnostics {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	h.pruneLocked(now)
+	a.pruneLocked(now)
 
-	alerts := make([]AlertAttempt, 0, h.attempts.Len())
-	for attempt := range h.attempts.All() {
+	alerts := make([]AlertAttempt, 0, a.attempts.Len())
+	for attempt := range a.attempts.All() {
 		alerts = append(alerts, *attempt)
 	}
 	return Diagnostics{
-		AlertHistoryInterval: h.interval,
+		AlertHistoryInterval: a.interval,
 		Alerts:               alerts,
 	}
 }
 
-func (h *alertHistory) SetInterval(interval time.Duration, now time.Time) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+func (a *alerts) SetInterval(interval time.Duration, now time.Time) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	h.interval = interval
-	h.pruneLocked(now)
+	a.interval = interval
+	a.pruneLocked(now)
 }
 
-func (h *alertHistory) pruneLocked(now time.Time) {
-	if h.interval == 0 {
+func (a *alerts) pruneLocked(now time.Time) {
+	if a.interval == 0 {
 		for {
-			if _, ok := h.attempts.Pop(); !ok {
+			if _, ok := a.attempts.Pop(); !ok {
 				return
 			}
 		}
 	}
 
-	cutoff := now.Add(-h.interval)
+	cutoff := now.Add(-a.interval)
 	for {
-		attempt, ok := h.attempts.Peek()
+		attempt, ok := a.attempts.Peek()
 		if !ok || !attempt.At.Before(cutoff) {
 			return
 		}
-		h.attempts.Pop()
+		a.attempts.Pop()
 	}
 }
 
