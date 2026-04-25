@@ -420,10 +420,7 @@ func renderChecksPanel(status *netmonv1.GetStatusResponse, width int) string {
 		return b.String()
 	}
 
-	labelWidth := width / 2
-	if labelWidth < 18 {
-		labelWidth = 18
-	}
+	labelWidth := 24 // max label is 21 chars ("Interface operational"); small fixed buffer
 	severityWidth := 4
 	summaryWidth := width - labelWidth - severityWidth - 5
 	if summaryWidth < 0 {
