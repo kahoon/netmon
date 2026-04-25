@@ -2,7 +2,9 @@ package collector
 
 import (
 	"bufio"
+	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -20,28 +22,57 @@ const (
 
 type ListenerCollector struct{}
 
-func (c ListenerCollector) Collect() (model.ListenerState, error) {
+func (c ListenerCollector) Collect(_ context.Context) (model.ListenerState, error) {
 	var state model.ListenerState
 	var err error
 
 	state.DNS53TCP, err = probeListeningSockets(53, "tcp")
 	if err != nil {
-		return state, fmt.Errorf("probe tcp/53: %w", err)
+		return stateWithListenerFailure(state, fmt.Errorf("probe tcp/53: %w", err))
 	}
 	state.DNS53UDP, err = probeListeningSockets(53, "udp")
 	if err != nil {
-		return state, fmt.Errorf("probe udp/53: %w", err)
+		return stateWithListenerFailure(state, fmt.Errorf("probe udp/53: %w", err))
 	}
 	state.Resolver5335TCP, err = probeListeningSockets(5335, "tcp")
 	if err != nil {
-		return state, fmt.Errorf("probe tcp/5335: %w", err)
+		return stateWithListenerFailure(state, fmt.Errorf("probe tcp/5335: %w", err))
 	}
 	state.Resolver5335UDP, err = probeListeningSockets(5335, "udp")
 	if err != nil {
-		return state, fmt.Errorf("probe udp/5335: %w", err)
+		return stateWithListenerFailure(state, fmt.Errorf("probe udp/5335: %w", err))
 	}
 
 	return state, nil
+}
+
+func stateWithListenerFailure(state model.ListenerState, err error) (model.ListenerState, error) {
+	state.CollectionFailure = classifyListenerCollectionFailure(err)
+	state.CollectionError = state.CollectionFailure.Detail
+	return state, err
+}
+
+func classifyListenerCollectionFailure(err error) model.CollectionFailure {
+	switch {
+	case errors.Is(err, os.ErrPermission):
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"listener collection permission denied",
+			err,
+		)
+	case errors.Is(err, os.ErrNotExist):
+		return model.NewCollectionFailure(
+			model.CollectionFailureUnavailable,
+			"listener socket table unavailable",
+			err,
+		)
+	default:
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"listener collection failed",
+			err,
+		)
+	}
 }
 
 func probeListeningSockets(port int, protocol string) (model.SocketProbe, error) {

@@ -247,6 +247,7 @@ message PiHoleState {
   PiHoleCounters counters = 6;
   DnsLatencyWindow latency_ipv4 = 7;
   DnsLatencyWindow latency_ipv6 = 8;
+  string collection_error = 9;
 }
 
 message TailscaleStatus {
@@ -285,6 +286,7 @@ message TailscaleState {
   TailscaleAddresses addresses = 2;
   TailscalePeers peers = 3;
   TailscaleRoles roles = 4;
+  string collection_error = 5;
 }
 
 message GetStateResponse {

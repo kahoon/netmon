@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+type errString string
+
+func (e errString) Error() string {
+	return string(e)
+}
+
 func TestInterfaceOperationalCheck(t *testing.T) {
 	t.Parallel()
 
@@ -99,6 +105,85 @@ func TestCollectionChecks(t *testing.T) {
 		}
 		if got.Detail != "open /proc/net/tcp: permission denied" {
 			t.Fatalf("Detail = %q, want %q", got.Detail, "open /proc/net/tcp: permission denied")
+		}
+	})
+
+	t.Run("Pi-hole authentication failure is specific", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeCollectionCheck(PiHoleState{
+			CollectionError: "Pi-hole API returned HTTP 401: unauthorized",
+			CollectionFailure: NewCollectionFailure(
+				CollectionFailureAuthentication,
+				"Pi-hole API authentication failed",
+				errString("Pi-hole API returned HTTP 401: unauthorized"),
+			),
+		})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+		if got.Summary != "Pi-hole API authentication failed" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Pi-hole API authentication failed")
+		}
+	})
+
+	t.Run("Pi-hole network failure is specific", func(t *testing.T) {
+		t.Parallel()
+
+		got := piholeCollectionCheck(PiHoleState{
+			CollectionError: "connect: connection refused",
+			CollectionFailure: NewCollectionFailure(
+				CollectionFailureUnavailable,
+				"Pi-hole API unreachable",
+				errString("connect: connection refused"),
+			),
+		})
+		if got.Summary != "Pi-hole API unreachable" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Pi-hole API unreachable")
+		}
+	})
+
+	t.Run("Tailscale command failure is specific", func(t *testing.T) {
+		t.Parallel()
+
+		got := tailscaleCollectionCheck(TailscaleState{
+			CollectionError: `exec: "tailscale": executable file not found in $PATH`,
+			CollectionFailure: NewCollectionFailure(
+				CollectionFailureCommandUnavailable,
+				"Tailscale command unavailable",
+				errString(`exec: "tailscale": executable file not found in $PATH`),
+			),
+		})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+		if got.Summary != "Tailscale command unavailable" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Tailscale command unavailable")
+		}
+	})
+
+	t.Run("collection failures preserves check order", func(t *testing.T) {
+		t.Parallel()
+
+		checks := EvaluateChecks("", SystemState{
+			Interface: InterfaceState{CollectionError: "netlink unavailable"},
+			PiHole: PiHoleState{
+				CollectionFailure: NewCollectionFailure(
+					CollectionFailureAuthentication,
+					"Pi-hole API authentication failed",
+					errString("Pi-hole authentication failed"),
+				),
+			},
+		})
+		failures := CollectionFailures(checks)
+		if len(failures) != 2 {
+			t.Fatalf("len(CollectionFailures) = %d, want 2", len(failures))
+		}
+		if got, want := failures[0].Key, checkInterfaceCollection; got != want {
+			t.Fatalf("failures[0].Key = %q, want %q", got, want)
+		}
+		if got, want := failures[1].Key, checkPiHoleCollection; got != want {
+			t.Fatalf("failures[1].Key = %q, want %q", got, want)
 		}
 	})
 }

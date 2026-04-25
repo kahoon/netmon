@@ -68,23 +68,57 @@ func (r CheckResult) Equal(other CheckResult) bool {
 
 type CheckSet map[string]CheckResult
 
+type CollectionFailureKind string
+
+const (
+	CollectionFailureGeneric            CollectionFailureKind = "generic"
+	CollectionFailureAuthentication     CollectionFailureKind = "authentication"
+	CollectionFailureUnavailable        CollectionFailureKind = "unavailable"
+	CollectionFailureInvalidResponse    CollectionFailureKind = "invalid_response"
+	CollectionFailureCommandUnavailable CollectionFailureKind = "command_unavailable"
+	CollectionFailureCommandFailed      CollectionFailureKind = "command_failed"
+)
+
+type CollectionFailure struct {
+	Kind    CollectionFailureKind
+	Summary string
+	Detail  string
+}
+
+func NewCollectionFailure(kind CollectionFailureKind, summary string, err error) CollectionFailure {
+	failure := CollectionFailure{
+		Kind:    kind,
+		Summary: summary,
+	}
+	if err != nil {
+		failure.Detail = err.Error()
+	}
+	return failure
+}
+
+func (f CollectionFailure) Failed() bool {
+	return f.Summary != "" || f.Detail != ""
+}
+
 type InterfaceState struct {
-	LinkIndex       int
-	IfName          string
-	LinkUp          bool
-	OperState       string
-	ULA             []string
-	GUA             []string
-	UsableGUA       []string
-	CollectionError string
+	LinkIndex         int
+	IfName            string
+	LinkUp            bool
+	OperState         string
+	ULA               []string
+	GUA               []string
+	UsableGUA         []string
+	CollectionError   string
+	CollectionFailure CollectionFailure
 }
 
 type ListenerState struct {
-	DNS53TCP        SocketProbe
-	DNS53UDP        SocketProbe
-	Resolver5335TCP SocketProbe
-	Resolver5335UDP SocketProbe
-	CollectionError string
+	DNS53TCP          SocketProbe
+	DNS53UDP          SocketProbe
+	Resolver5335TCP   SocketProbe
+	Resolver5335UDP   SocketProbe
+	CollectionError   string
+	CollectionFailure CollectionFailure
 }
 
 type DNSProbeStatus string
@@ -121,21 +155,25 @@ type UnboundState struct {
 }
 
 type PiHoleState struct {
-	DNSV4       DNSProbeResult
-	DNSV6       DNSProbeResult
-	Status      PiHoleStatus
-	Upstreams   PiHoleUpstreams
-	Gravity     PiHoleGravity
-	Counters    PiHoleCounters
-	LatencyIPv4 DNSLatencyWindow
-	LatencyIPv6 DNSLatencyWindow
+	DNSV4             DNSProbeResult
+	DNSV6             DNSProbeResult
+	Status            PiHoleStatus
+	Upstreams         PiHoleUpstreams
+	Gravity           PiHoleGravity
+	Counters          PiHoleCounters
+	LatencyIPv4       DNSLatencyWindow
+	LatencyIPv6       DNSLatencyWindow
+	CollectionError   string
+	CollectionFailure CollectionFailure
 }
 
 type TailscaleState struct {
-	Status    TailscaleStatus
-	Addresses TailscaleAddresses
-	Peers     TailscalePeers
-	Roles     TailscaleRoles
+	Status            TailscaleStatus
+	Addresses         TailscaleAddresses
+	Peers             TailscalePeers
+	Roles             TailscaleRoles
+	CollectionError   string
+	CollectionFailure CollectionFailure
 }
 
 type SystemState struct {

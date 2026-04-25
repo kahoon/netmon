@@ -854,12 +854,14 @@ var topCheckMetaByKey = map[string]topCheckMeta{
 	"resolver5335-exposed-tcp": {label: "Unbound TCP exposed", section: "Unbound", order: 12},
 	"resolver5335-exposed-udp": {label: "Unbound UDP exposed", section: "Unbound", order: 13},
 	"dnssec-validation":        {label: "Unbound DNSSEC", section: "Unbound", order: 14},
-	"pihole-dns-v4":            {label: "Pi-hole DNS IPv4", section: "Pi-hole", order: 15},
-	"pihole-dns-v6":            {label: "Pi-hole DNS IPv6", section: "Pi-hole", order: 16},
-	"pihole-blocking":          {label: "Pi-hole blocking", section: "Pi-hole", order: 17},
-	"pihole-upstreams":         {label: "Pi-hole upstreams", section: "Pi-hole", order: 18},
-	"pihole-gravity":           {label: "Pi-hole gravity", section: "Pi-hole", order: 19},
-	"tailscale-connected":      {label: "Tailscale connected", section: "Tailscale", order: 20},
+	"pihole-collection":        {label: "Pi-hole collection", section: "Pi-hole", order: 15},
+	"pihole-dns-v4":            {label: "Pi-hole DNS IPv4", section: "Pi-hole", order: 16},
+	"pihole-dns-v6":            {label: "Pi-hole DNS IPv6", section: "Pi-hole", order: 17},
+	"pihole-blocking":          {label: "Pi-hole blocking", section: "Pi-hole", order: 18},
+	"pihole-upstreams":         {label: "Pi-hole upstreams", section: "Pi-hole", order: 19},
+	"pihole-gravity":           {label: "Pi-hole gravity", section: "Pi-hole", order: 20},
+	"tailscale-collection":     {label: "Tailscale collection", section: "Tailscale", order: 21},
+	"tailscale-connected":      {label: "Tailscale connected", section: "Tailscale", order: 22},
 }
 
 func topCheckMetaFor(check *netmonv1.Check) topCheckMeta {

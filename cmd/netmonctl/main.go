@@ -1011,15 +1011,14 @@ func rpcDiagnostic(err error) (rpcHint, bool) {
 			cause:   "request timed out",
 		}, true
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) && netErr.Timeout() {
+	if netErr, ok := errors.AsType[net.Error](err); ok && netErr.Timeout() {
 		return rpcHint{
 			summary: "request timed out, is netmond running?",
 			cause:   "request timed out",
 		}, true
 	}
 
-	if errno, ok := rpcErrno(err); ok {
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
 		switch errno {
 		case syscall.ENOENT:
 			return rpcHint{
@@ -1052,12 +1051,4 @@ func rpcDiagnostic(err error) (rpcHint, bool) {
 	}
 
 	return rpcHint{}, false
-}
-
-func rpcErrno(err error) (syscall.Errno, bool) {
-	var errno syscall.Errno
-	if errors.As(err, &errno) {
-		return errno, true
-	}
-	return 0, false
 }

@@ -2,6 +2,7 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -17,6 +18,15 @@ type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
+}
+
+type staticCollector[T any] struct {
+	value T
+	err   error
+}
+
+func (c staticCollector[T]) Collect(context.Context) (T, error) {
+	return c.value, c.err
 }
 
 func TestGetStatusReturnsOrderedChecks(t *testing.T) {
@@ -138,6 +148,134 @@ func TestGetStateReturnsCopy(t *testing.T) {
 	}
 	if got, want := daemon.state.Tailscale.Roles.AdvertisedRoutes[0], "192.168.1.0/24"; got != want {
 		t.Fatalf("monitor tailscale state mutated through GetState() copy: got %q want %q", got, want)
+	}
+}
+
+func TestInitializeSendsStartupCollectionFailureNotification(t *testing.T) {
+	authErr := errors.New("Pi-hole authentication failed")
+	cfg := config.Config{
+		MonitorInterface:     "eno1",
+		NtfyHost:             "ntfy.example",
+		Topic:                "alerts",
+		AlertHistoryInterval: 7 * 24 * time.Hour,
+	}
+	daemon := NewMonitor(cfg)
+	daemon.interfaceCollector = staticCollector[model.InterfaceState]{
+		value: model.InterfaceState{IfName: "eno1", OperState: "up"},
+	}
+	daemon.listenerCollector = staticCollector[model.ListenerState]{}
+	daemon.upstreamCollector = staticCollector[model.UpstreamState]{}
+	daemon.unboundCollector = staticCollector[model.UnboundState]{}
+	daemon.piholeCollector = staticCollector[model.PiHoleState]{
+		value: model.PiHoleState{
+			CollectionError: authErr.Error(),
+			CollectionFailure: model.NewCollectionFailure(
+				model.CollectionFailureAuthentication,
+				"Pi-hole API authentication failed",
+				authErr,
+			),
+		},
+		err: authErr,
+	}
+	daemon.tailscaleCollector = staticCollector[model.TailscaleState]{
+		value: model.TailscaleState{
+			Status: model.TailscaleStatus{
+				Running:       true,
+				Authenticated: true,
+				Connected:     true,
+			},
+			Addresses: model.TailscaleAddresses{IPv4: "100.64.0.1"},
+		},
+	}
+
+	var postedBody string
+	var postedTitle string
+	daemon.notifier = &NtfyNotifier{
+		host:  cfg.NtfyHost,
+		topic: cfg.Topic,
+		client: &http.Client{
+			Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					t.Fatalf("ReadAll(notification body) error = %v", err)
+				}
+				postedBody = string(body)
+				postedTitle = req.Header.Get("Title")
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("ok")),
+				}, nil
+			}),
+		},
+	}
+
+	if err := daemon.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+	if got, want := postedTitle, "WARN netmon eno1"; got != want {
+		t.Fatalf("posted title = %q, want %q", got, want)
+	}
+	if !strings.Contains(postedBody, "reason: startup collection") {
+		t.Fatalf("posted body = %q, want startup collection reason", postedBody)
+	}
+	if !strings.Contains(postedBody, "- Pi-hole API authentication failed") {
+		t.Fatalf("posted body = %q, want Pi-hole authentication summary", postedBody)
+	}
+
+	diagnostics := daemon.alerts.Snapshot(time.Now().Local())
+	if len(diagnostics.Alerts) != 1 {
+		t.Fatalf("len(alert history) = %d, want 1", len(diagnostics.Alerts))
+	}
+	if got, want := diagnostics.Alerts[0].Summary, "Pi-hole API authentication failed"; got != want {
+		t.Fatalf("alert summary = %q, want %q", got, want)
+	}
+	if got, want := diagnostics.Alerts[0].DeliveryStatus, AlertDelivered; got != want {
+		t.Fatalf("alert delivery status = %q, want %q", got, want)
+	}
+}
+
+func TestInitializeKeepsInterfaceCollectionFailureInState(t *testing.T) {
+	cfg := config.Config{
+		MonitorInterface:     "eno1",
+		NtfyHost:             "ntfy.example",
+		Topic:                "alerts",
+		AlertHistoryInterval: 7 * 24 * time.Hour,
+	}
+	daemon := NewMonitor(cfg)
+	daemon.interfaceCollector = staticCollector[model.InterfaceState]{
+		err: errors.New("link not found"),
+	}
+	daemon.listenerCollector = staticCollector[model.ListenerState]{}
+	daemon.upstreamCollector = staticCollector[model.UpstreamState]{}
+	daemon.unboundCollector = staticCollector[model.UnboundState]{}
+	daemon.piholeCollector = staticCollector[model.PiHoleState]{}
+	daemon.tailscaleCollector = staticCollector[model.TailscaleState]{}
+	daemon.notifier = &NtfyNotifier{
+		host:  cfg.NtfyHost,
+		topic: cfg.Topic,
+		client: &http.Client{
+			Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return &http.Response{
+					StatusCode: http.StatusOK,
+					Body:       io.NopCloser(strings.NewReader("ok")),
+				}, nil
+			}),
+		},
+	}
+
+	if err := daemon.Initialize(context.Background()); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	state, err := daemon.GetState(context.Background())
+	if err != nil {
+		t.Fatalf("GetState() error = %v", err)
+	}
+	if got, want := state.Interface.IfName, "eno1"; got != want {
+		t.Fatalf("Interface.IfName = %q, want %q", got, want)
+	}
+	if got, want := state.Interface.CollectionError, "link not found"; got != want {
+		t.Fatalf("Interface.CollectionError = %q, want %q", got, want)
 	}
 }
 

@@ -122,6 +122,89 @@ func TestPiholeUpstreamsMatch(t *testing.T) {
 	}
 }
 
+func TestClassifyPiHoleCollectionFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		err     error
+		kind    model.CollectionFailureKind
+		summary string
+	}{
+		{
+			name:    "authentication sentinel",
+			err:     errPiHoleAuthentication,
+			kind:    model.CollectionFailureAuthentication,
+			summary: "Pi-hole API authentication failed",
+		},
+		{
+			name:    "unauthorized response",
+			err:     piHoleAPIError{Code: 401, Message: "unauthorized"},
+			kind:    model.CollectionFailureAuthentication,
+			summary: "Pi-hole API authentication failed",
+		},
+		{
+			name:    "server response",
+			err:     piHoleAPIError{Code: 500, Message: "internal server error"},
+			kind:    model.CollectionFailureGeneric,
+			summary: "Pi-hole API request failed",
+		},
+		{
+			name:    "invalid response",
+			err:     errPiHoleInvalidResponse,
+			kind:    model.CollectionFailureInvalidResponse,
+			summary: "Pi-hole API response invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := classifyPiHoleCollectionFailure(tt.err)
+			if got.Kind != tt.kind {
+				t.Fatalf("Kind = %q, want %q", got.Kind, tt.kind)
+			}
+			if got.Summary != tt.summary {
+				t.Fatalf("Summary = %q, want %q", got.Summary, tt.summary)
+			}
+			if got.Detail == "" {
+				t.Fatal("Detail is empty, want original error text")
+			}
+		})
+	}
+}
+
+func TestPiHoleCollectorSetsCollectionFailure(t *testing.T) {
+	t.Parallel()
+
+	collector := &PiHoleCollector{
+		Client:            fakePiHoleClient{blockingErr: errPiHoleAuthentication},
+		ProbeTimeout:      time.Millisecond,
+		GravityMaxAge:     defaultGravityMaxAge,
+		ExpectedUpstreams: append([]string{}, defaultPiHoleExpectedUpstreams...),
+		latencyV4:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](latencySampleSize)),
+		latencyV6:         ring.New[time.Duration](ring.WithMinCapacity[time.Duration](latencySampleSize)),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	state, err := collector.Collect(ctx)
+	if err == nil {
+		t.Fatal("Collect() error = nil, want collection error")
+	}
+	if got, want := state.CollectionFailure.Kind, model.CollectionFailureAuthentication; got != want {
+		t.Fatalf("CollectionFailure.Kind = %q, want %q", got, want)
+	}
+	if got, want := state.CollectionFailure.Summary, "Pi-hole API authentication failed"; got != want {
+		t.Fatalf("CollectionFailure.Summary = %q, want %q", got, want)
+	}
+	if got, want := state.CollectionError, errPiHoleAuthentication.Error(); got != want {
+		t.Fatalf("CollectionError = %q, want %q", got, want)
+	}
+}
+
 // makeLatencyQueue pushes samples into a new ring queue in order.
 func makeLatencyQueue(samples []time.Duration) *ring.Queue[time.Duration] {
 	q := ring.New[time.Duration](ring.WithMinCapacity[time.Duration](latencySampleSize))
@@ -315,7 +398,10 @@ func TestPiHoleCollectorCollect(t *testing.T) {
 		},
 	})
 
-	state := c.Collect(context.Background())
+	state, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
 
 	if got, want := state.Status.Blocking, "enabled"; got != want {
 		t.Errorf("Status.Blocking = %q, want %q", got, want)
@@ -358,7 +444,10 @@ func TestPiHoleCollectorCollect_upstreamMismatch(t *testing.T) {
 		summary:   PiHoleSummary{GravityUpdated: time.Now()},
 	})
 
-	state := c.Collect(context.Background())
+	state, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
 
 	if state.Upstreams.MatchesExpected {
 		t.Error("Upstreams.MatchesExpected = true, want false")
@@ -376,7 +465,10 @@ func TestPiHoleCollectorCollect_staleGravity(t *testing.T) {
 		},
 	})
 
-	state := c.Collect(context.Background())
+	state, err := c.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
 
 	if !state.Gravity.Stale {
 		t.Error("Gravity.Stale = false, want true (gravity is > 7 days old)")
@@ -394,19 +486,21 @@ func TestPiHoleCollectorCollect_apiErrors(t *testing.T) {
 		summaryErr:   apiErr,
 	})
 
-	state := c.Collect(context.Background())
-
+	state, err := c.Collect(context.Background())
+	if err == nil {
+		t.Fatal("Collect() error = nil, want error from blocking failure")
+	}
 	if state.Status.Detail == "" {
-		t.Error("Status.Detail is empty, want error from blocking failure")
+		t.Error("Status.Detail is empty, want error detail")
 	}
 	if state.Upstreams.Detail == "" {
-		t.Error("Upstreams.Detail is empty, want error from upstreams failure")
+		t.Error("Upstreams.Detail is empty, want error detail")
 	}
 	if state.Gravity.Detail == "" {
-		t.Error("Gravity.Detail is empty, want error from summary failure")
+		t.Error("Gravity.Detail is empty, want error detail")
 	}
 	if state.Counters.Detail == "" {
-		t.Error("Counters.Detail is empty, want error from summary failure")
+		t.Error("Counters.Detail is empty, want error detail")
 	}
 }
 

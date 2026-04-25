@@ -1,6 +1,8 @@
 package collector
 
 import (
+	"context"
+	"errors"
 	"net"
 
 	"github.com/kahoon/netmon/internal/model"
@@ -8,12 +10,20 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type InterfaceCollector struct{}
+type InterfaceCollector struct {
+	// Name is the network interface to collect state from (e.g. "eno1").
+	Name string
+}
 
-func (c InterfaceCollector) Collect(ifName string) (model.InterfaceState, error) {
-	link, err := netlink.LinkByName(ifName)
+func (c InterfaceCollector) Collect(_ context.Context) (model.InterfaceState, error) {
+	link, err := netlink.LinkByName(c.Name)
 	if err != nil {
-		return model.InterfaceState{}, err
+		failure := classifyInterfaceCollectionFailure(err)
+		return model.InterfaceState{
+			IfName:            c.Name,
+			CollectionError:   failure.Detail,
+			CollectionFailure: failure,
+		}, err
 	}
 
 	attrs := link.Attrs()
@@ -26,6 +36,8 @@ func (c InterfaceCollector) Collect(ifName string) (model.InterfaceState, error)
 
 	addrs, err := netlink.AddrList(link, netlink.FAMILY_ALL)
 	if err != nil {
+		state.CollectionFailure = classifyInterfaceCollectionFailure(err)
+		state.CollectionError = state.CollectionFailure.Detail
 		return state, err
 	}
 
@@ -51,6 +63,30 @@ func (c InterfaceCollector) Collect(ifName string) (model.InterfaceState, error)
 	state.UsableGUA = model.SortedUnique(state.UsableGUA)
 
 	return state, nil
+}
+
+func classifyInterfaceCollectionFailure(err error) model.CollectionFailure {
+	_, isNotFound := errors.AsType[netlink.LinkNotFoundError](err)
+	switch {
+	case isNotFound:
+		return model.NewCollectionFailure(
+			model.CollectionFailureUnavailable,
+			"monitor interface not found",
+			err,
+		)
+	case errors.Is(err, unix.EPERM):
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"interface collection permission denied",
+			err,
+		)
+	default:
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"interface collection failed",
+			err,
+		)
+	}
 }
 
 func classifyIP(ip net.IP) string {

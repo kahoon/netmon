@@ -68,7 +68,7 @@ type UpstreamCollector struct {
 	ProbeTimeout time.Duration
 }
 
-func (c UpstreamCollector) Collect(ctx context.Context) model.UpstreamState {
+func (c UpstreamCollector) Collect(ctx context.Context) (model.UpstreamState, error) {
 	return model.UpstreamState{
 		RootDNSV4:      c.probeRootDNS(ctx, "udp4"),
 		RootDNSV6:      c.probeRootDNS(ctx, "udp6"),
@@ -76,7 +76,7 @@ func (c UpstreamCollector) Collect(ctx context.Context) model.UpstreamState {
 		RecursiveDNSV6: c.probeRecursiveDNS(ctx, "udp6", dns.TypeAAAA, recursiveResolversV6),
 		PublicIPv4:     c.observePublicIP(ctx, "udp4", publicIPv4Providers),
 		PublicIPv6:     c.observePublicIP(ctx, "udp6", publicIPv6Providers),
-	}
+	}, nil
 }
 
 func (c UpstreamCollector) probeRootDNS(ctx context.Context, network string) model.DNSProbeResult {

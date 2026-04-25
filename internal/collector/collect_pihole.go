@@ -2,12 +2,15 @@ package collector
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"slices"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/kahoon/netmon/internal/config"
@@ -58,7 +61,7 @@ func NewPiHoleCollector(cfg config.Config) *PiHoleCollector {
 	}
 }
 
-func (c *PiHoleCollector) Collect(ctx context.Context) model.PiHoleState {
+func (c *PiHoleCollector) Collect(ctx context.Context) (model.PiHoleState, error) {
 	state := model.PiHoleState{
 		DNSV4: c.probeDNS(ctx, "udp4", "127.0.0.1", dns.TypeA),
 		DNSV6: c.probeDNS(ctx, "udp6", "::1", dns.TypeAAAA),
@@ -68,11 +71,20 @@ func (c *PiHoleCollector) Collect(ctx context.Context) model.PiHoleState {
 	state.LatencyIPv4 = c.snapshotLatency("ipv4")
 	state.LatencyIPv6 = c.snapshotLatency("ipv6")
 
-	if blocking, err := c.Client.GetBlocking(ctx); err != nil {
+	// GetBlocking is the primary API health check. A failure here means the
+	// Pi-hole API is unreachable, so we surface it as a collection error and
+	// skip the remaining API calls (they would fail too).
+	blocking, err := c.Client.GetBlocking(ctx)
+	if err != nil {
 		state.Status.Detail = err.Error()
-	} else {
-		state.Status.Blocking = blocking
+		state.Upstreams.Detail = err.Error()
+		state.Gravity.Detail = err.Error()
+		state.Counters.Detail = err.Error()
+		state.CollectionFailure = classifyPiHoleCollectionFailure(err)
+		state.CollectionError = state.CollectionFailure.Detail
+		return state, err
 	}
+	state.Status.Blocking = blocking
 
 	if core, web, ftl, err := c.Client.GetVersions(ctx); err == nil {
 		state.Status.CoreVersion = core
@@ -103,7 +115,85 @@ func (c *PiHoleCollector) Collect(ctx context.Context) model.PiHoleState {
 		}
 	}
 
-	return state
+	return state, nil
+}
+
+func classifyPiHoleCollectionFailure(err error) model.CollectionFailure {
+	switch {
+	case isPiHoleAuthenticationError(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureAuthentication,
+			"Pi-hole API authentication failed",
+			err,
+		)
+	case isPiHoleUnavailableError(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureUnavailable,
+			"Pi-hole API unreachable",
+			err,
+		)
+	case isPiHoleInvalidResponseError(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureInvalidResponse,
+			"Pi-hole API response invalid",
+			err,
+		)
+	case isPiHoleAPIError(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"Pi-hole API request failed",
+			err,
+		)
+	default:
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"Pi-hole collection failed",
+			err,
+		)
+	}
+}
+
+func isPiHoleAuthenticationError(err error) bool {
+	if errors.Is(err, errPiHoleAuthentication) {
+		return true
+	}
+	apiErr, ok := errors.AsType[piHoleAPIError](err)
+	return ok && (apiErr.Code == http.StatusUnauthorized || apiErr.Code == http.StatusForbidden)
+}
+
+func isPiHoleUnavailableError(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	if _, ok := errors.AsType[net.Error](err); ok {
+		return true
+	}
+	if _, ok := errors.AsType[*net.OpError](err); ok {
+		return true
+	}
+	if errno, ok := errors.AsType[syscall.Errno](err); ok {
+		switch errno {
+		case syscall.ECONNREFUSED, syscall.ECONNRESET, syscall.EHOSTUNREACH, syscall.ENETUNREACH, syscall.ETIMEDOUT:
+			return true
+		}
+	}
+	return false
+}
+
+func isPiHoleInvalidResponseError(err error) bool {
+	if errors.Is(err, errPiHoleInvalidResponse) {
+		return true
+	}
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
+		return true
+	}
+	_, ok := errors.AsType[*json.UnmarshalTypeError](err)
+	return ok
+}
+
+func isPiHoleAPIError(err error) bool {
+	_, ok := errors.AsType[piHoleAPIError](err)
+	return ok
 }
 
 func (c *PiHoleCollector) probeDNS(ctx context.Context, network, host string, qtype uint16) model.DNSProbeResult {

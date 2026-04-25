@@ -22,11 +22,13 @@ const (
 	checkExternalDNSV4       = "external-dns-v4"
 	checkExternalDNSV6       = "external-dns-v6"
 	checkDNSSEC              = "dnssec-validation"
+	checkPiHoleCollection    = "pihole-collection"
 	checkPiHoleDNSV4         = "pihole-dns-v4"
 	checkPiHoleDNSV6         = "pihole-dns-v6"
 	checkPiHoleBlocking      = "pihole-blocking"
 	checkPiHoleUpstreams     = "pihole-upstreams"
 	checkPiHoleGravity       = "pihole-gravity"
+	checkTailscaleCollection = "tailscale-collection"
 	checkTailscale           = "tailscale-connected"
 )
 
@@ -45,11 +47,13 @@ var checkOrder = []string{
 	checkExternalDNSV4,
 	checkExternalDNSV6,
 	checkDNSSEC,
+	checkPiHoleCollection,
 	checkPiHoleDNSV4,
 	checkPiHoleDNSV6,
 	checkPiHoleBlocking,
 	checkPiHoleUpstreams,
 	checkPiHoleGravity,
+	checkTailscaleCollection,
 	checkTailscale,
 }
 
@@ -69,11 +73,13 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	addCheck(checks, externalDNSCheck(checkExternalDNSV4, "IPv4", state.Upstream.RootDNSV4, state.Upstream.RecursiveDNSV4))
 	addCheck(checks, externalDNSCheck(checkExternalDNSV6, "IPv6", state.Upstream.RootDNSV6, state.Upstream.RecursiveDNSV6))
 	addCheck(checks, dnssecValidationCheck(state.Unbound.DNSSEC))
+	addCheck(checks, piholeCollectionCheck(state.PiHole))
 	addCheck(checks, piholeDNSCheck(checkPiHoleDNSV4, "IPv4", state.PiHole.DNSV4))
 	addCheck(checks, piholeDNSCheck(checkPiHoleDNSV6, "IPv6", state.PiHole.DNSV6))
 	addCheck(checks, piholeBlockingCheck(state.PiHole.Status))
 	addCheck(checks, piholeUpstreamsCheck(state.PiHole.Upstreams))
 	addCheck(checks, piholeGravityCheck(state.PiHole.Gravity))
+	addCheck(checks, tailscaleCollectionCheck(state.Tailscale))
 	addCheck(checks, tailscaleConnectedCheck(state.Tailscale))
 	return checks
 }
@@ -116,6 +122,24 @@ func CheckOrder() []string {
 	return append([]string{}, checkOrder...)
 }
 
+func CollectionFailures(checks CheckSet) []CheckResult {
+	keys := []string{
+		checkInterfaceCollection,
+		checkListenerCollection,
+		checkPiHoleCollection,
+		checkTailscaleCollection,
+	}
+	failures := make([]CheckResult, 0, len(keys))
+	for _, key := range keys {
+		result, ok := checks[key]
+		if !ok || result.Severity == SeverityOK {
+			continue
+		}
+		failures = append(failures, result)
+	}
+	return failures
+}
+
 func interfaceOperationalCheck(state SystemState) CheckResult {
 	result := CheckResult{
 		Key:      checkInterfaceOper,
@@ -139,13 +163,14 @@ func interfaceCollectionCheck(state InterfaceState) CheckResult {
 		Severity: SeverityOK,
 	}
 
-	if state.CollectionError == "" {
+	failure := collectionFailure(state.CollectionFailure, state.CollectionError, "interface collection failed")
+	if !failure.Failed() {
 		return result
 	}
 
 	result.Severity = SeverityWarn
-	result.Summary = "interface collection failed"
-	result.Detail = state.CollectionError
+	result.Summary = failure.Summary
+	result.Detail = failure.Detail
 	return result
 }
 
@@ -193,13 +218,14 @@ func listenerCollectionCheck(state ListenerState) CheckResult {
 		Severity: SeverityOK,
 	}
 
-	if state.CollectionError == "" {
+	failure := collectionFailure(state.CollectionFailure, state.CollectionError, "listener collection failed")
+	if !failure.Failed() {
 		return result
 	}
 
 	result.Severity = SeverityWarn
-	result.Summary = "listener collection failed"
-	result.Detail = state.CollectionError
+	result.Summary = failure.Summary
+	result.Detail = failure.Detail
 	return result
 }
 
@@ -300,6 +326,42 @@ func dnssecValidationCheck(result DNSSECProbeResult) CheckResult {
 	return check
 }
 
+func piholeCollectionCheck(state PiHoleState) CheckResult {
+	result := CheckResult{
+		Key:      checkPiHoleCollection,
+		Label:    "Pi-hole collection",
+		Severity: SeverityOK,
+	}
+
+	failure := collectionFailure(state.CollectionFailure, state.CollectionError, "Pi-hole collection failed")
+	if !failure.Failed() {
+		return result
+	}
+
+	result.Severity = SeverityWarn
+	result.Summary = failure.Summary
+	result.Detail = failure.Detail
+	return result
+}
+
+func tailscaleCollectionCheck(state TailscaleState) CheckResult {
+	result := CheckResult{
+		Key:      checkTailscaleCollection,
+		Label:    "Tailscale collection",
+		Severity: SeverityOK,
+	}
+
+	failure := collectionFailure(state.CollectionFailure, state.CollectionError, "Tailscale collection failed")
+	if !failure.Failed() {
+		return result
+	}
+
+	result.Severity = SeverityWarn
+	result.Summary = failure.Summary
+	result.Detail = failure.Detail
+	return result
+}
+
 func piholeDNSCheck(key, family string, probe DNSProbeResult) CheckResult {
 	check := CheckResult{
 		Key:      key,
@@ -389,6 +451,10 @@ func tailscaleConnectedCheck(state TailscaleState) CheckResult {
 		Severity: SeverityOK,
 	}
 
+	if state.CollectionError != "" {
+		return check
+	}
+
 	if state.Status.Connected {
 		return check
 	}
@@ -433,4 +499,24 @@ func missingFamilies(probe SocketProbe) []string {
 		missing = append(missing, "IPv6")
 	}
 	return missing
+}
+
+func collectionFailure(failure CollectionFailure, detail string, fallbackSummary string) CollectionFailure {
+	if failure.Failed() {
+		if failure.Summary == "" {
+			failure.Summary = fallbackSummary
+		}
+		if failure.Detail == "" {
+			failure.Detail = detail
+		}
+		return failure
+	}
+	if detail == "" {
+		return CollectionFailure{}
+	}
+	return CollectionFailure{
+		Kind:    CollectionFailureGeneric,
+		Summary: fallbackSummary,
+		Detail:  detail,
+	}
 }

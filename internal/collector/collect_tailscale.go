@@ -3,6 +3,7 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -26,20 +27,28 @@ func NewTailscaleCollector() TailscaleCollector {
 	}
 }
 
-func (c TailscaleCollector) Collect(ctx context.Context) model.TailscaleState {
-	state := model.TailscaleState{}
-
+func (c TailscaleCollector) Collect(ctx context.Context) (model.TailscaleState, error) {
 	statusPayload, err := c.Runner.Status(ctx)
 	if err != nil {
-		state.Status.Detail = err.Error()
-		return state
+		failure := classifyTailscaleCollectionFailure(err)
+		return model.TailscaleState{
+			Status:            model.TailscaleStatus{Detail: err.Error()},
+			CollectionError:   failure.Detail,
+			CollectionFailure: failure,
+		}, err
 	}
 
 	var status tailscaleStatusResponse
 	if err := json.Unmarshal(statusPayload, &status); err != nil {
-		state.Status.Detail = fmt.Sprintf("decode status: %v", err)
-		return state
+		failure := classifyTailscaleCollectionFailure(err)
+		return model.TailscaleState{
+			Status:            model.TailscaleStatus{Detail: fmt.Sprintf("decode status: %v", err)},
+			CollectionError:   failure.Detail,
+			CollectionFailure: failure,
+		}, err
 	}
+
+	var state model.TailscaleState
 
 	prefsLoaded := false
 	prefsPayload, err := c.Runner.Prefs(ctx)
@@ -75,7 +84,54 @@ func (c TailscaleCollector) Collect(ctx context.Context) model.TailscaleState {
 		state.Roles.AdvertisesExitNode = advertisesExitNode(state.Roles.AdvertisedRoutes)
 	}
 
-	return state
+	return state, nil
+}
+
+func classifyTailscaleCollectionFailure(err error) model.CollectionFailure {
+	switch {
+	case isTailscaleCommandUnavailable(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureCommandUnavailable,
+			"Tailscale command unavailable",
+			err,
+		)
+	case isTailscaleInvalidResponseError(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureInvalidResponse,
+			"Tailscale status response invalid",
+			err,
+		)
+	case isTailscaleCommandFailed(err):
+		return model.NewCollectionFailure(
+			model.CollectionFailureCommandFailed,
+			"Tailscale status command failed",
+			err,
+		)
+	default:
+		return model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"Tailscale collection failed",
+			err,
+		)
+	}
+}
+
+func isTailscaleCommandUnavailable(err error) bool {
+	_, ok := errors.AsType[*exec.Error](err)
+	return ok
+}
+
+func isTailscaleCommandFailed(err error) bool {
+	_, ok := errors.AsType[*exec.ExitError](err)
+	return ok
+}
+
+func isTailscaleInvalidResponseError(err error) bool {
+	if _, ok := errors.AsType[*json.SyntaxError](err); ok {
+		return true
+	}
+	_, ok := errors.AsType[*json.UnmarshalTypeError](err)
+	return ok
 }
 
 type tailscaleExecRunner struct{}

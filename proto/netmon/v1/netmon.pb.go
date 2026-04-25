@@ -2113,17 +2113,18 @@ func (x *DnsLatencyWindow) GetTrend() string {
 }
 
 type PiHoleState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	DnsV4         *DnsProbeResult        `protobuf:"bytes,1,opt,name=dns_v4,json=dnsV4,proto3" json:"dns_v4,omitempty"`
-	DnsV6         *DnsProbeResult        `protobuf:"bytes,2,opt,name=dns_v6,json=dnsV6,proto3" json:"dns_v6,omitempty"`
-	Status        *PiHoleStatus          `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
-	Upstreams     *PiHoleUpstreams       `protobuf:"bytes,4,opt,name=upstreams,proto3" json:"upstreams,omitempty"`
-	Gravity       *PiHoleGravity         `protobuf:"bytes,5,opt,name=gravity,proto3" json:"gravity,omitempty"`
-	Counters      *PiHoleCounters        `protobuf:"bytes,6,opt,name=counters,proto3" json:"counters,omitempty"`
-	LatencyIpv4   *DnsLatencyWindow      `protobuf:"bytes,7,opt,name=latency_ipv4,json=latencyIpv4,proto3" json:"latency_ipv4,omitempty"`
-	LatencyIpv6   *DnsLatencyWindow      `protobuf:"bytes,8,opt,name=latency_ipv6,json=latencyIpv6,proto3" json:"latency_ipv6,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	DnsV4           *DnsProbeResult        `protobuf:"bytes,1,opt,name=dns_v4,json=dnsV4,proto3" json:"dns_v4,omitempty"`
+	DnsV6           *DnsProbeResult        `protobuf:"bytes,2,opt,name=dns_v6,json=dnsV6,proto3" json:"dns_v6,omitempty"`
+	Status          *PiHoleStatus          `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`
+	Upstreams       *PiHoleUpstreams       `protobuf:"bytes,4,opt,name=upstreams,proto3" json:"upstreams,omitempty"`
+	Gravity         *PiHoleGravity         `protobuf:"bytes,5,opt,name=gravity,proto3" json:"gravity,omitempty"`
+	Counters        *PiHoleCounters        `protobuf:"bytes,6,opt,name=counters,proto3" json:"counters,omitempty"`
+	LatencyIpv4     *DnsLatencyWindow      `protobuf:"bytes,7,opt,name=latency_ipv4,json=latencyIpv4,proto3" json:"latency_ipv4,omitempty"`
+	LatencyIpv6     *DnsLatencyWindow      `protobuf:"bytes,8,opt,name=latency_ipv6,json=latencyIpv6,proto3" json:"latency_ipv6,omitempty"`
+	CollectionError string                 `protobuf:"bytes,9,opt,name=collection_error,json=collectionError,proto3" json:"collection_error,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PiHoleState) Reset() {
@@ -2210,6 +2211,13 @@ func (x *PiHoleState) GetLatencyIpv6() *DnsLatencyWindow {
 		return x.LatencyIpv6
 	}
 	return nil
+}
+
+func (x *PiHoleState) GetCollectionError() string {
+	if x != nil {
+		return x.CollectionError
+	}
+	return ""
 }
 
 type TailscaleStatus struct {
@@ -2509,13 +2517,14 @@ func (x *TailscaleRoles) GetDetail() string {
 }
 
 type TailscaleState struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        *TailscaleStatus       `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	Addresses     *TailscaleAddresses    `protobuf:"bytes,2,opt,name=addresses,proto3" json:"addresses,omitempty"`
-	Peers         *TailscalePeers        `protobuf:"bytes,3,opt,name=peers,proto3" json:"peers,omitempty"`
-	Roles         *TailscaleRoles        `protobuf:"bytes,4,opt,name=roles,proto3" json:"roles,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Status          *TailscaleStatus       `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
+	Addresses       *TailscaleAddresses    `protobuf:"bytes,2,opt,name=addresses,proto3" json:"addresses,omitempty"`
+	Peers           *TailscalePeers        `protobuf:"bytes,3,opt,name=peers,proto3" json:"peers,omitempty"`
+	Roles           *TailscaleRoles        `protobuf:"bytes,4,opt,name=roles,proto3" json:"roles,omitempty"`
+	CollectionError string                 `protobuf:"bytes,5,opt,name=collection_error,json=collectionError,proto3" json:"collection_error,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TailscaleState) Reset() {
@@ -2574,6 +2583,13 @@ func (x *TailscaleState) GetRoles() *TailscaleRoles {
 		return x.Roles
 	}
 	return nil
+}
+
+func (x *TailscaleState) GetCollectionError() string {
+	if x != nil {
+		return x.CollectionError
+	}
+	return ""
 }
 
 type GetStateResponse struct {
@@ -4106,7 +4122,7 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\aaverage\x18\x02 \x01(\v2\x19.google.protobuf.DurationR\aaverage\x12+\n" +
 	"\x03max\x18\x03 \x01(\v2\x19.google.protobuf.DurationR\x03max\x12\x18\n" +
 	"\asamples\x18\x04 \x01(\x04R\asamples\x12\x14\n" +
-	"\x05trend\x18\x05 \x01(\tR\x05trend\"\xc7\x03\n" +
+	"\x05trend\x18\x05 \x01(\tR\x05trend\"\xf2\x03\n" +
 	"\vPiHoleState\x120\n" +
 	"\x06dns_v4\x18\x01 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x05dnsV4\x120\n" +
 	"\x06dns_v6\x18\x02 \x01(\v2\x19.netmon.v1.DnsProbeResultR\x05dnsV6\x12/\n" +
@@ -4115,7 +4131,8 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\agravity\x18\x05 \x01(\v2\x18.netmon.v1.PiHoleGravityR\agravity\x125\n" +
 	"\bcounters\x18\x06 \x01(\v2\x19.netmon.v1.PiHoleCountersR\bcounters\x12>\n" +
 	"\flatency_ipv4\x18\a \x01(\v2\x1b.netmon.v1.DnsLatencyWindowR\vlatencyIpv4\x12>\n" +
-	"\flatency_ipv6\x18\b \x01(\v2\x1b.netmon.v1.DnsLatencyWindowR\vlatencyIpv6\"\xc2\x02\n" +
+	"\flatency_ipv6\x18\b \x01(\v2\x1b.netmon.v1.DnsLatencyWindowR\vlatencyIpv6\x12)\n" +
+	"\x10collection_error\x18\t \x01(\tR\x0fcollectionError\"\xc2\x02\n" +
 	"\x0fTailscaleStatus\x12\x18\n" +
 	"\arunning\x18\x01 \x01(\bR\arunning\x12#\n" +
 	"\rbackend_state\x18\x02 \x01(\tR\fbackendState\x12$\n" +
@@ -4139,12 +4156,13 @@ const file_netmon_v1_netmon_proto_rawDesc = "" +
 	"\x0eTailscaleRoles\x120\n" +
 	"\x14advertises_exit_node\x18\x01 \x01(\bR\x12advertisesExitNode\x12+\n" +
 	"\x11advertised_routes\x18\x02 \x03(\tR\x10advertisedRoutes\x12\x16\n" +
-	"\x06detail\x18\x03 \x01(\tR\x06detail\"\xe3\x01\n" +
+	"\x06detail\x18\x03 \x01(\tR\x06detail\"\x8e\x02\n" +
 	"\x0eTailscaleState\x122\n" +
 	"\x06status\x18\x01 \x01(\v2\x1a.netmon.v1.TailscaleStatusR\x06status\x12;\n" +
 	"\taddresses\x18\x02 \x01(\v2\x1d.netmon.v1.TailscaleAddressesR\taddresses\x12/\n" +
 	"\x05peers\x18\x03 \x01(\v2\x19.netmon.v1.TailscalePeersR\x05peers\x12/\n" +
-	"\x05roles\x18\x04 \x01(\v2\x19.netmon.v1.TailscaleRolesR\x05roles\"\xd5\x02\n" +
+	"\x05roles\x18\x04 \x01(\v2\x19.netmon.v1.TailscaleRolesR\x05roles\x12)\n" +
+	"\x10collection_error\x18\x05 \x01(\tR\x0fcollectionError\"\xd5\x02\n" +
 	"\x10GetStateResponse\x127\n" +
 	"\tinterface\x18\x01 \x01(\v2\x19.netmon.v1.InterfaceStateR\tinterface\x126\n" +
 	"\tlisteners\x18\x02 \x01(\v2\x18.netmon.v1.ListenerStateR\tlisteners\x124\n" +

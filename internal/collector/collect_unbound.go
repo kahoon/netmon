@@ -23,7 +23,7 @@ type UnboundCollector struct {
 	ProbeTimeout time.Duration
 }
 
-func (c UnboundCollector) Collect(ctx context.Context) model.UnboundState {
+func (c UnboundCollector) Collect(ctx context.Context) (model.UnboundState, error) {
 	positive := c.queryDNSSECPositive(ctx)
 	negative := c.queryDNSSECNegative(ctx)
 	emitDNSSECTrace(ctx, "dnssec_positive", positive)
@@ -34,7 +34,7 @@ func (c UnboundCollector) Collect(ctx context.Context) model.UnboundState {
 			Positive: positive,
 			Negative: negative,
 		},
-	}
+	}, nil
 }
 
 func (c UnboundCollector) queryDNSSECPositive(ctx context.Context) model.DNSSECProbeAttempt {

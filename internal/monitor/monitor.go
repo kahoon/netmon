@@ -19,12 +19,12 @@ type Monitor struct {
 	notifier *NtfyNotifier
 	mgr      *pending.Manager
 
-	interfaceCollector collector.InterfaceCollector
-	listenerCollector  collector.ListenerCollector
-	upstreamCollector  collector.UpstreamCollector
-	unboundCollector   collector.UnboundCollector
-	piholeCollector    *collector.PiHoleCollector
-	tailscaleCollector collector.TailscaleCollector
+	interfaceCollector collector.Collector[model.InterfaceState]
+	listenerCollector  collector.Collector[model.ListenerState]
+	upstreamCollector  collector.Collector[model.UpstreamState]
+	unboundCollector   collector.Collector[model.UnboundState]
+	piholeCollector    collector.Collector[model.PiHoleState]
+	tailscaleCollector collector.Collector[model.TailscaleState]
 
 	mu     sync.Mutex
 	state  model.SystemState
@@ -46,7 +46,7 @@ func NewMonitor(cfg config.Config) *Monitor {
 	monitor := &Monitor{
 		cfg:                  cfg,
 		notifier:             NewNtfyNotifier(cfg),
-		interfaceCollector:   collector.InterfaceCollector{},
+		interfaceCollector:   collector.InterfaceCollector{Name: cfg.MonitorInterface},
 		listenerCollector:    collector.ListenerCollector{},
 		upstreamCollector:    collector.UpstreamCollector{ProbeTimeout: cfg.DNSProbeTimeout},
 		unboundCollector:     collector.UnboundCollector{ProbeTimeout: cfg.DNSProbeTimeout},
@@ -91,20 +91,43 @@ func NewMonitor(cfg config.Config) *Monitor {
 }
 
 func (m *Monitor) Initialize(ctx context.Context) error {
-	iface, err := m.interfaceCollector.Collect(m.cfg.MonitorInterface)
+	iface, err := m.interfaceCollector.Collect(ctx)
 	if err != nil {
-		return err
+		iface.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"interface collection failed",
+			err,
+		)
+		iface.CollectionError = iface.CollectionFailure.Detail
+		if iface.IfName == "" {
+			iface.IfName = m.cfg.MonitorInterface
+		}
 	}
 
-	listeners, err := m.listenerCollector.Collect()
+	listeners, err := m.listenerCollector.Collect(ctx)
 	if err != nil {
-		return err
+		listeners.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"listener collection failed",
+			err,
+		)
+		listeners.CollectionError = listeners.CollectionFailure.Detail
 	}
 
-	upstream := m.upstreamCollector.Collect(ctx)
-	unbound := m.unboundCollector.Collect(ctx)
-	pihole := m.piholeCollector.Collect(ctx)
-	tailscale := m.tailscaleCollector.Collect(ctx)
+	// Collection errors are embedded in the returned state and surface through
+	// checks; they should not block initial startup.
+	upstream, _ := m.upstreamCollector.Collect(ctx)
+	unbound, _ := m.unboundCollector.Collect(ctx)
+
+	pihole, err := m.piholeCollector.Collect(ctx)
+	if err != nil {
+		pihole = m.piholeStateWithCollectionError(pihole, err)
+	}
+
+	tailscale, err := m.tailscaleCollector.Collect(ctx)
+	if err != nil {
+		tailscale = m.tailscaleStateWithCollectionError(tailscale, err)
+	}
 	state := model.SystemState{
 		Interface: iface,
 		Listeners: listeners,
@@ -130,6 +153,10 @@ func (m *Monitor) Initialize(ctx context.Context) error {
 		log.Printf("initial public IPv6: %s", state.Upstream.PublicIPv6.IP)
 	} else if state.Upstream.PublicIPv6.Detail != "" {
 		log.Printf("initial public IPv6 lookup failed: %s", state.Upstream.PublicIPv6.Detail)
+	}
+
+	if note := BuildCollectionFailureNotification(m.cfg, "startup collection", checks); note != nil {
+		m.sendNotification(events.WithHub(ctx, m.bus), *note)
 	}
 
 	return nil
@@ -162,124 +189,141 @@ func (m *Monitor) CurrentLinkIndex() int {
 
 func (m *Monitor) RefreshInterface(ctx context.Context, reason string) error {
 	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "interface", reason, func(context.Context) (model.InterfaceState, error) {
-		return m.interfaceCollector.Collect(m.cfg.MonitorInterface)
-	})
+	state, err := collectWithEvents(ctx, "interface", reason, m.interfaceCollector.Collect)
 	if err != nil {
-		state = m.interfaceStateWithCollectionError(err)
-		m.applyUpdate(ctx, reason, func(current *model.SystemState) {
-			current.Interface = state
-		})
-		return err
+		state = m.interfaceStateWithCollectionError(state, err)
 	}
-
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Interface = state
 	})
-
-	return nil
+	return err
 }
 
-func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
-	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "listeners", reason, func(context.Context) (model.ListenerState, error) {
-		return m.listenerCollector.Collect()
-	})
-	if err != nil {
-		state = m.listenerStateWithCollectionError(err)
-		m.applyUpdate(ctx, reason, func(current *model.SystemState) {
-			current.Listeners = state
-		})
-		return err
-	}
-
-	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
-		current.Listeners = state
-	})
-
-	return nil
-}
-
-func (m *Monitor) interfaceStateWithCollectionError(err error) model.InterfaceState {
+func (m *Monitor) interfaceStateWithCollectionError(partial model.InterfaceState, err error) model.InterfaceState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	state := m.state.Interface
-	state.CollectionError = err.Error()
+	state.CollectionFailure = partial.CollectionFailure
+	if !state.CollectionFailure.Failed() {
+		state.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"interface collection failed",
+			err,
+		)
+	}
+	if state.CollectionFailure.Detail == "" && err != nil {
+		state.CollectionFailure.Detail = err.Error()
+	}
+	state.CollectionError = state.CollectionFailure.Detail
+	if state.IfName == "" && partial.IfName != "" {
+		state.IfName = partial.IfName
+	}
 	return state
 }
 
-func (m *Monitor) listenerStateWithCollectionError(err error) model.ListenerState {
+func (m *Monitor) RefreshListeners(ctx context.Context, reason string) error {
+	ctx = events.WithHub(ctx, m.bus)
+	state, err := collectWithEvents(ctx, "listeners", reason, m.listenerCollector.Collect)
+	if err != nil {
+		state = m.listenerStateWithCollectionError(state, err)
+	}
+	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
+		current.Listeners = state
+	})
+	return err
+}
+
+func (m *Monitor) listenerStateWithCollectionError(partial model.ListenerState, err error) model.ListenerState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	state := m.state.Listeners
-	state.CollectionError = err.Error()
+	state.CollectionFailure = partial.CollectionFailure
+	if !state.CollectionFailure.Failed() {
+		state.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"listener collection failed",
+			err,
+		)
+	}
+	if state.CollectionFailure.Detail == "" && err != nil {
+		state.CollectionFailure.Detail = err.Error()
+	}
+	state.CollectionError = state.CollectionFailure.Detail
 	return state
 }
 
 func (m *Monitor) RefreshUpstream(ctx context.Context, reason string) error {
 	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "upstream", reason, func(context.Context) (model.UpstreamState, error) {
-		return m.upstreamCollector.Collect(ctx), nil
-	})
-	if err != nil {
-		return err
-	}
-
+	state, err := collectWithEvents(ctx, "upstream", reason, m.upstreamCollector.Collect)
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Upstream = state
 	})
-
-	return nil
+	return err
 }
 
 func (m *Monitor) RefreshUnbound(ctx context.Context, reason string) error {
 	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "unbound", reason, func(context.Context) (model.UnboundState, error) {
-		return m.unboundCollector.Collect(ctx), nil
-	})
-	if err != nil {
-		return err
-	}
-
+	state, err := collectWithEvents(ctx, "unbound", reason, m.unboundCollector.Collect)
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Unbound = state
 	})
-
-	return nil
+	return err
 }
 
 func (m *Monitor) RefreshPiHole(ctx context.Context, reason string) error {
 	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "pihole", reason, func(context.Context) (model.PiHoleState, error) {
-		return m.piholeCollector.Collect(ctx), nil
-	})
+	state, err := collectWithEvents(ctx, "pihole", reason, m.piholeCollector.Collect)
 	if err != nil {
-		return err
+		state = m.piholeStateWithCollectionError(state, err)
 	}
-
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.PiHole = state
 	})
+	return err
+}
 
-	return nil
+func (m *Monitor) piholeStateWithCollectionError(partial model.PiHoleState, err error) model.PiHoleState {
+	if !partial.CollectionFailure.Failed() {
+		partial.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"Pi-hole collection failed",
+			err,
+		)
+	}
+	if partial.CollectionFailure.Detail == "" && err != nil {
+		partial.CollectionFailure.Detail = err.Error()
+	}
+	partial.CollectionError = partial.CollectionFailure.Detail
+	return partial
 }
 
 func (m *Monitor) RefreshTailscale(ctx context.Context, reason string) error {
 	ctx = events.WithHub(ctx, m.bus)
-	state, err := collectWithEvents(ctx, "tailscale", reason, func(context.Context) (model.TailscaleState, error) {
-		return m.tailscaleCollector.Collect(ctx), nil
-	})
+	state, err := collectWithEvents(ctx, "tailscale", reason, m.tailscaleCollector.Collect)
 	if err != nil {
-		return err
+		state = m.tailscaleStateWithCollectionError(state, err)
 	}
-
 	m.applyUpdate(ctx, reason, func(current *model.SystemState) {
 		current.Tailscale = state
 	})
+	return err
+}
 
-	return nil
+func (m *Monitor) tailscaleStateWithCollectionError(partial model.TailscaleState, err error) model.TailscaleState {
+	if !partial.CollectionFailure.Failed() {
+		partial.CollectionFailure = model.NewCollectionFailure(
+			model.CollectionFailureGeneric,
+			"Tailscale collection failed",
+			err,
+		)
+	}
+	if partial.CollectionFailure.Detail == "" && err != nil {
+		partial.CollectionFailure.Detail = err.Error()
+	}
+	partial.CollectionError = partial.CollectionFailure.Detail
+	return partial
 }
 
 func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*model.SystemState)) {
@@ -341,10 +385,14 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 		return
 	}
 
-	if err := m.notifier.Send(ctx, *note); err != nil {
+	m.sendNotification(ctx, *note)
+}
+
+func (m *Monitor) sendNotification(ctx context.Context, note Notification) {
+	if err := m.notifier.Send(ctx, note); err != nil {
 		log.Printf("notify failed: %v", err)
 		now := time.Now().Local()
-		m.recordAlertAttempt(*note, false, err, now)
+		m.recordAlertAttempt(note, false, err, now)
 		events.Emit(ctx, events.NotificationFailed{
 			At:    now,
 			Error: err.Error(),
@@ -354,7 +402,7 @@ func (m *Monitor) applyUpdate(ctx context.Context, reason string, update func(*m
 
 	log.Printf("notification sent: %s", note.Title)
 	now := time.Now().Local()
-	m.recordAlertAttempt(*note, true, nil, now)
+	m.recordAlertAttempt(note, true, nil, now)
 	events.Emit(ctx, events.NotificationSent{
 		At:       now,
 		Title:    note.Title,
@@ -415,8 +463,7 @@ func collectWithEvents[T any](ctx context.Context, name, reason string, fn func(
 			Duration:  time.Since(started),
 			Error:     err.Error(),
 		})
-		var zero T
-		return zero, err
+		return value, err // propagate partial state alongside the error
 	}
 
 	events.Emit(ctx, events.CollectorFinished{

@@ -546,14 +546,15 @@ func mapDNSSECProbeAttempt(attempt model.DNSSECProbeAttempt) *netmonv1.DnssecPro
 
 func mapPiHoleState(state model.PiHoleState) *netmonv1.PiHoleState {
 	return &netmonv1.PiHoleState{
-		DnsV4:       mapDNSProbe(state.DNSV4),
-		DnsV6:       mapDNSProbe(state.DNSV6),
-		Status:      mapPiHoleStatus(state.Status),
-		Upstreams:   mapPiHoleUpstreams(state.Upstreams),
-		Gravity:     mapPiHoleGravity(state.Gravity),
-		Counters:    mapPiHoleCounters(state.Counters),
-		LatencyIpv4: mapDNSLatencyWindow(state.LatencyIPv4),
-		LatencyIpv6: mapDNSLatencyWindow(state.LatencyIPv6),
+		DnsV4:           mapDNSProbe(state.DNSV4),
+		DnsV6:           mapDNSProbe(state.DNSV6),
+		Status:          mapPiHoleStatus(state.Status),
+		Upstreams:       mapPiHoleUpstreams(state.Upstreams),
+		Gravity:         mapPiHoleGravity(state.Gravity),
+		Counters:        mapPiHoleCounters(state.Counters),
+		LatencyIpv4:     mapDNSLatencyWindow(state.LatencyIPv4),
+		LatencyIpv6:     mapDNSLatencyWindow(state.LatencyIPv6),
+		CollectionError: state.CollectionError,
 	}
 }
 
@@ -617,10 +618,11 @@ func mapDNSLatencyWindow(window model.DNSLatencyWindow) *netmonv1.DnsLatencyWind
 
 func mapTailscaleState(state model.TailscaleState) *netmonv1.TailscaleState {
 	return &netmonv1.TailscaleState{
-		Status:    mapTailscaleStatus(state.Status),
-		Addresses: mapTailscaleAddresses(state.Addresses),
-		Peers:     mapTailscalePeers(state.Peers),
-		Roles:     mapTailscaleRoles(state.Roles),
+		Status:          mapTailscaleStatus(state.Status),
+		Addresses:       mapTailscaleAddresses(state.Addresses),
+		Peers:           mapTailscalePeers(state.Peers),
+		Roles:           mapTailscaleRoles(state.Roles),
+		CollectionError: state.CollectionError,
 	}
 }
 

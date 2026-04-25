@@ -2,7 +2,10 @@ package collector
 
 import (
 	"context"
+	"os/exec"
 	"testing"
+
+	"github.com/kahoon/netmon/internal/model"
 )
 
 type fakeTailscaleRunner struct {
@@ -45,7 +48,10 @@ func TestTailscaleCollectorCollect(t *testing.T) {
 		},
 	}
 
-	state := collector.Collect(context.Background())
+	state, err := collector.Collect(context.Background())
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
 	if !state.Status.Connected {
 		t.Fatal("Status.Connected = false, want true")
 	}
@@ -69,5 +75,70 @@ func TestTailscaleCollectorCollect(t *testing.T) {
 	}
 	if got, want := len(state.Roles.AdvertisedRoutes), 3; got != want {
 		t.Fatalf("len(Roles.AdvertisedRoutes) = %d, want %d", got, want)
+	}
+}
+
+func TestClassifyTailscaleCollectionFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		err     error
+		kind    model.CollectionFailureKind
+		summary string
+	}{
+		{
+			name:    "missing command",
+			err:     &exec.Error{Name: "tailscale", Err: exec.ErrNotFound},
+			kind:    model.CollectionFailureCommandUnavailable,
+			summary: "Tailscale command unavailable",
+		},
+		{
+			name:    "command failed",
+			err:     &exec.ExitError{},
+			kind:    model.CollectionFailureCommandFailed,
+			summary: "Tailscale status command failed",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := classifyTailscaleCollectionFailure(tt.err)
+			if got.Kind != tt.kind {
+				t.Fatalf("Kind = %q, want %q", got.Kind, tt.kind)
+			}
+			if got.Summary != tt.summary {
+				t.Fatalf("Summary = %q, want %q", got.Summary, tt.summary)
+			}
+			if got.Detail == "" {
+				t.Fatal("Detail is empty, want original error text")
+			}
+		})
+	}
+}
+
+func TestTailscaleCollectorSetsCollectionFailure(t *testing.T) {
+	t.Parallel()
+
+	collector := TailscaleCollector{
+		Runner: fakeTailscaleRunner{
+			err: &exec.Error{Name: "tailscale", Err: exec.ErrNotFound},
+		},
+	}
+
+	state, err := collector.Collect(context.Background())
+	if err == nil {
+		t.Fatal("Collect() error = nil, want collection error")
+	}
+	if got, want := state.CollectionFailure.Kind, model.CollectionFailureCommandUnavailable; got != want {
+		t.Fatalf("CollectionFailure.Kind = %q, want %q", got, want)
+	}
+	if got, want := state.CollectionFailure.Summary, "Tailscale command unavailable"; got != want {
+		t.Fatalf("CollectionFailure.Summary = %q, want %q", got, want)
+	}
+	if state.CollectionError == "" {
+		t.Fatal("CollectionError is empty, want original error text")
 	}
 }

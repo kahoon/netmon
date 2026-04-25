@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+var (
+	errPiHoleAuthentication  = errors.New("Pi-hole API authentication failed")
+	errPiHoleInvalidResponse = errors.New("Pi-hole API response invalid")
+)
+
 type PiHoleClient interface {
 	GetBlocking(ctx context.Context) (string, error)
 	GetVersions(ctx context.Context) (core string, web string, ftl string, err error)
@@ -65,7 +70,7 @@ func (c *piHoleAPIClient) GetBlocking(ctx context.Context) (string, error) {
 		}
 		return "disabled", nil
 	default:
-		return "", fmt.Errorf("missing blocking status in response")
+		return "", fmt.Errorf("%w: missing blocking status", errPiHoleInvalidResponse)
 	}
 }
 
@@ -79,7 +84,7 @@ func (c *piHoleAPIClient) GetVersions(ctx context.Context) (core string, web str
 	web = firstStringPath(payload, []string{"version", "web", "local"}, []string{"version", "web", "version"})
 	ftl = firstStringPath(payload, []string{"version", "ftl", "local"}, []string{"version", "ftl", "version"})
 	if core == "" && web == "" && ftl == "" {
-		return "", "", "", fmt.Errorf("missing version data in response")
+		return "", "", "", fmt.Errorf("%w: missing version data", errPiHoleInvalidResponse)
 	}
 	return core, web, ftl, nil
 }
@@ -95,7 +100,7 @@ func (c *piHoleAPIClient) GetUpstreams(ctx context.Context) ([]string, error) {
 		[]string{"dns", "upstreams"},
 	)
 	if len(upstreams) == 0 {
-		return nil, fmt.Errorf("missing upstream configuration in response")
+		return nil, fmt.Errorf("%w: missing upstream configuration", errPiHoleInvalidResponse)
 	}
 	return upstreams, nil
 }
@@ -167,7 +172,7 @@ func (c *piHoleAPIClient) ensureSession(ctx context.Context) error {
 		return err
 	}
 	if !resp.Session.Valid {
-		return fmt.Errorf("Pi-hole authentication failed")
+		return errPiHoleAuthentication
 	}
 
 	c.mu.Lock()
@@ -224,7 +229,10 @@ func (c *piHoleAPIClient) doJSON(ctx context.Context, method, path string, paylo
 	if out == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		return fmt.Errorf("%w: %w", errPiHoleInvalidResponse, err)
+	}
+	return nil
 }
 
 type piHoleAPIError struct {

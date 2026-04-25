@@ -82,6 +82,38 @@ func TestCurrentOverallSeverityPromotesDualExternalFailure(t *testing.T) {
 	}
 }
 
+func TestBuildCollectionFailureNotification(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{MonitorInterface: "eno1"}
+	checks := makeCheckSet(
+		model.CheckResult{
+			Key:      "pihole-collection",
+			Label:    "Pi-hole collection",
+			Severity: model.SeverityWarn,
+			Summary:  "Pi-hole API authentication failed",
+			Detail:   "Pi-hole API returned HTTP 401: unauthorized",
+		},
+	)
+
+	note := BuildCollectionFailureNotification(cfg, "startup collection", checks)
+	if note == nil {
+		t.Fatal("BuildCollectionFailureNotification() = nil, want notification")
+	}
+	if got, want := note.Severity, model.SeverityWarn; got != want {
+		t.Fatalf("Severity = %s, want %s", got, want)
+	}
+	if got, want := note.Summary, "Pi-hole API authentication failed"; got != want {
+		t.Fatalf("Summary = %q, want %q", got, want)
+	}
+	if !strings.Contains(note.Body, "reason: startup collection") {
+		t.Fatalf("Body = %q, want startup collection reason", note.Body)
+	}
+	if !strings.Contains(note.Body, "- Pi-hole API authentication failed") {
+		t.Fatalf("Body = %q, want collection failure summary", note.Body)
+	}
+}
+
 func makeCheckSet(results ...model.CheckResult) model.CheckSet {
 	checks := make(model.CheckSet, len(model.CheckOrder()))
 	for _, key := range model.CheckOrder() {
@@ -95,12 +127,16 @@ func makeCheckSet(results ...model.CheckResult) model.CheckSet {
 
 func defaultCheckLabel(key string) string {
 	switch key {
+	case "interface-collection":
+		return "interface collection"
 	case "expected-ula":
 		return "expected ULA"
 	case "interface-oper":
 		return "interface operational"
 	case "usable-gua":
 		return "usable global IPv6"
+	case "listener-collection":
+		return "listener collection"
 	case "dns53-tcp":
 		return "53/tcp"
 	case "dns53-udp":
@@ -119,6 +155,8 @@ func defaultCheckLabel(key string) string {
 		return "external DNS IPv6"
 	case "dnssec-validation":
 		return "DNSSEC validation"
+	case "pihole-collection":
+		return "Pi-hole collection"
 	case "pihole-dns-v4":
 		return "Pi-hole DNS IPv4"
 	case "pihole-dns-v6":
@@ -129,6 +167,10 @@ func defaultCheckLabel(key string) string {
 		return "Pi-hole upstreams"
 	case "pihole-gravity":
 		return "Pi-hole gravity freshness"
+	case "tailscale-collection":
+		return "Tailscale collection"
+	case "tailscale-connected":
+		return "Tailscale connectivity"
 	default:
 		return key
 	}

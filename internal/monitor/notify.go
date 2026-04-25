@@ -126,6 +126,39 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 	bodyLines := []string{
 		"reason: " + reason,
 		"severity: " + severity.String(),
+		"collection failures:",
+	}
+	for _, line := range lines {
+		bodyLines = append(bodyLines, "- "+line)
+	}
+
+	return &Notification{
+		Severity: severity,
+		Title:    fmt.Sprintf("%s netmon %s", severity.String(), cfg.MonitorInterface),
+		Body:     strings.Join(bodyLines, "\n"),
+		Reason:   reason,
+		Summary:  alertSummary(lines),
+	}
+}
+
+func BuildCollectionFailureNotification(cfg config.Config, reason string, checks model.CheckSet) *Notification {
+	failures := model.CollectionFailures(checks)
+	if len(failures) == 0 {
+		return nil
+	}
+
+	severity := model.SeverityInfo
+	lines := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		if failure.Severity > severity {
+			severity = failure.Severity
+		}
+		lines = append(lines, failure.Summary)
+	}
+
+	bodyLines := []string{
+		"reason: " + reason,
+		"severity: " + severity.String(),
 		"changed:",
 	}
 	for _, line := range lines {
