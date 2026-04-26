@@ -422,10 +422,7 @@ func renderChecksPanel(status *netmonv1.GetStatusResponse, width int) string {
 
 	labelWidth := 24 // max label is 21 chars ("Interface operational"); small fixed buffer
 	severityWidth := 4
-	summaryWidth := width - labelWidth - severityWidth - 5
-	if summaryWidth < 0 {
-		summaryWidth = 0
-	}
+	summaryWidth := max(width-labelWidth-severityWidth-5, 0)
 
 	var previousSection string
 	for _, check := range topOrderedChecks(status.GetChecks()) {
@@ -685,10 +682,7 @@ func renderTopDiagnostics(diagnostics *netmonv1.GetDiagnosticsResponse, alertInd
 
 // topDiagRow renders a diagnostics row with a plain-text value, truncated to fit.
 func topDiagRow(label, value string, width int) string {
-	valueWidth := width - topLabelWidth - 1
-	if valueWidth < 0 {
-		valueWidth = 0
-	}
+	valueWidth := max(width-topLabelWidth-1, 0)
 	return topRow(topLabelWidth, label, topTruncate(value, valueWidth))
 }
 
@@ -706,10 +700,7 @@ func renderTopFooter(showDiagnostics bool, width int) string {
 		hint = "[d]iagnostics  [r]efresh  [q]uit"
 	}
 	content := topTruncate(hint+" ", width)
-	pad := width - lipgloss.Width(content)
-	if pad < 0 {
-		pad = 0
-	}
+	pad := max(width-lipgloss.Width(content), 0)
 	return topStyleDim.Render(strings.Repeat(" ", pad) + content)
 }
 
