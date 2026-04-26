@@ -365,7 +365,7 @@ func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoR
 		}
 	}
 
-	// Right side: version + uptime + alert count + update ages.
+	// Right side: version + alert count + uptime + update ages.
 	// Each part is styled individually so the alert count can be highlighted
 	// independently of the surrounding dim metadata.
 	sep := topStyleDim.Render("   ")
@@ -374,10 +374,6 @@ func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoR
 		if v := info.GetVersion(); v != "" {
 			rightParts = append(rightParts, topStyleDim.Render(v))
 		}
-		if ts := info.GetStartedAtUnix(); ts > 0 {
-			uptime := time.Since(time.Unix(ts, 0))
-			rightParts = append(rightParts, topStyleDim.Render("up "+topFormatAge(uptime)))
-		}
 	}
 	if diagnostics != nil {
 		alertStr := fmt.Sprintf("alerts %d", len(diagnostics.GetAlerts()))
@@ -385,6 +381,12 @@ func renderTopHeader(status *netmonv1.GetStatusResponse, info *netmonv1.GetInfoR
 			rightParts = append(rightParts, topStyleWarn.Render(alertStr))
 		} else {
 			rightParts = append(rightParts, topStyleDim.Render(alertStr))
+		}
+	}
+	if info != nil {
+		if ts := info.GetStartedAtUnix(); ts > 0 {
+			uptime := time.Since(time.Unix(ts, 0))
+			rightParts = append(rightParts, topStyleDim.Render("up "+topFormatAge(uptime)))
 		}
 	}
 	if !statusUpdated.IsZero() {
