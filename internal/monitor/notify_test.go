@@ -69,7 +69,7 @@ func TestBuildChangeNotificationCompactBody(t *testing.T) {
 	}
 }
 
-func TestCurrentOverallSeverityPromotesDualExternalFailure(t *testing.T) {
+func TestCurrentHealthSeverityPromotesDualExternalFailure(t *testing.T) {
 	t.Parallel()
 
 	checks := makeCheckSet(
@@ -77,8 +77,8 @@ func TestCurrentOverallSeverityPromotesDualExternalFailure(t *testing.T) {
 		model.CheckResult{Key: "external-dns-v6", Label: "external DNS IPv6", Severity: model.SeverityWarn},
 	)
 
-	if got, want := model.CurrentOverallSeverity(checks), model.SeverityCrit; got != want {
-		t.Fatalf("CurrentOverallSeverity() = %s, want %s", got, want)
+	if got, want := model.CurrentHealthSeverity(checks, model.SeverityInfo), model.SeverityCrit; got != want {
+		t.Fatalf("CurrentHealthSeverity() = %s, want %s", got, want)
 	}
 }
 

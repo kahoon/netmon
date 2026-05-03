@@ -60,7 +60,7 @@ func statusViewFromDomain(event events.Event) (StatusView, bool) {
 
 func statusViewFromSnapshot(state model.SystemState, checks model.CheckSet) StatusView {
 	return StatusView{
-		OverallSeverity: model.CurrentHealthSeverity(checks),
+		OverallSeverity: model.CurrentHealthSeverity(checks, model.SeverityOK),
 		Summary:         summarizeChecks(checks),
 		PublicIPv4:      state.Upstream.PublicIPv4.IP,
 		PublicIPv6:      state.Upstream.PublicIPv6.IP,

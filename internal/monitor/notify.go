@@ -122,7 +122,7 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 		return nil
 	}
 
-	severity := model.CurrentOverallSeverity(currentChecks)
+	severity := model.CurrentHealthSeverity(currentChecks, model.SeverityInfo)
 	bodyLines := []string{
 		"reason: " + reason,
 		"severity: " + severity.String(),

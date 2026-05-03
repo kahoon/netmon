@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -44,7 +43,8 @@ func main() {
 
 	spec, ok := commandRegistry[command]
 	if !ok {
-		log.Fatalf("unknown command %q", command)
+		fmt.Fprintf(os.Stderr, "netmonctl: unknown command: %q\n", command)
+		os.Exit(2)
 	}
 
 	spec.run(spec, os.Args[2:])
@@ -144,7 +144,8 @@ func runWatch(spec commandSpec, args []string) {
 			fatalRPC(err, cmd.socketPath)
 		}
 	default:
-		log.Fatalf("unknown watch subject %q", subject)
+		fmt.Printf("unknown watch subject: %q\n", subject)
+		os.Exit(2)
 	}
 }
 
@@ -159,7 +160,8 @@ func runTrace(spec commandSpec, args []string) {
 
 	scope, err := parseRefreshScope(scopeName)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "netmonctl: scope: %v\n", err)
+		os.Exit(2)
 	}
 
 	stream, err := cmd.client.Trace(cmd.ctx, connect.NewRequest(&netmonv1.TraceRequest{Scope: scope}))
@@ -232,7 +234,8 @@ func runState(spec commandSpec, args []string) {
 		Indent:    "  ",
 	}.Marshal(resp.Msg)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "marshal json: %v\n", err)
+		os.Exit(2)
 	}
 
 	fmt.Println(string(data))
@@ -260,7 +263,8 @@ func runStats(spec commandSpec, args []string) {
 		Indent:    "  ",
 	}.Marshal(resp.Msg)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "marshal json: %v\n", err)
+		os.Exit(2)
 	}
 
 	fmt.Println(string(data))
@@ -303,7 +307,8 @@ func runRefresh(spec commandSpec, args []string) {
 
 	scope, err := parseRefreshScope(scopeName)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Fprintf(os.Stderr, "netmonctl: scope: %v\n", err)
+		os.Exit(2)
 	}
 
 	if _, err := cmd.client.Refresh(cmd.ctx, connect.NewRequest(&netmonv1.RefreshRequest{Scope: scope})); err != nil {
@@ -334,7 +339,8 @@ func runSet(spec commandSpec, args []string) {
 		case "off", "false", "disabled", "disable":
 			enabled = false
 		default:
-			log.Fatalf("invalid value for debug setting: %q (use on/off)", rest[1])
+			fmt.Fprintf(os.Stderr, "netmonctl: invalid value for debug setting: %q (use on/off)\n", rest[1])
+			os.Exit(2)
 		}
 		_, err := cmd.client.SetDebug(cmd.ctx, connect.NewRequest(&netmonv1.SetDebugRequest{
 			Debug: enabled,
@@ -346,7 +352,8 @@ func runSet(spec commandSpec, args []string) {
 	case "runtime-stats-interval":
 		interval, err := parseCommandDuration(rest[1])
 		if err != nil {
-			log.Fatalf("invalid duration %q: %v", rest[1], err)
+			fmt.Fprintf(os.Stderr, "netmonctl: invalid runtime stats interval %q: %v\n", rest[1], err)
+			os.Exit(2)
 		}
 
 		_, err = cmd.client.SetRuntimeStatsInterval(cmd.ctx, connect.NewRequest(&netmonv1.SetRuntimeStatsIntervalRequest{
@@ -359,7 +366,8 @@ func runSet(spec commandSpec, args []string) {
 	case "alert-history-interval":
 		interval, err := parseCommandDuration(rest[1])
 		if err != nil {
-			log.Fatalf("invalid duration %q: %v", rest[1], err)
+			fmt.Fprintf(os.Stderr, "netmonctl: invalid alert history interval %q: %v\n", rest[1], err)
+			os.Exit(2)
 		}
 
 		_, err = cmd.client.SetAlertHistoryInterval(cmd.ctx, connect.NewRequest(&netmonv1.SetAlertHistoryIntervalRequest{
@@ -370,7 +378,8 @@ func runSet(spec commandSpec, args []string) {
 		}
 		fmt.Printf("%s = %s\n", setting, strings.TrimSpace(rest[1]))
 	default:
-		log.Fatalf("unknown setting %q", rest[0])
+		fmt.Fprintf(os.Stderr, "netmonctl: unknown setting %q\n", rest[0])
+		os.Exit(2)
 	}
 }
 
@@ -993,7 +1002,8 @@ func fatalRPC(err error, socketPath string) {
 		}
 		os.Exit(1)
 	}
-	log.Fatal(err)
+	fmt.Fprintf(os.Stderr, "netmonctl: RPC error: %v\n", err)
+	os.Exit(1)
 }
 
 type rpcHint struct {

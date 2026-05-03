@@ -84,25 +84,8 @@ func EvaluateChecks(expectedULA string, state SystemState) CheckSet {
 	return checks
 }
 
-func CurrentOverallSeverity(checks CheckSet) Severity {
-	severity := SeverityInfo
-	for _, result := range checks {
-		if result.Severity > severity {
-			severity = result.Severity
-		}
-	}
-
-	if severity < SeverityCrit &&
-		checks[checkExternalDNSV4].Severity >= SeverityWarn &&
-		checks[checkExternalDNSV6].Severity >= SeverityWarn {
-		return SeverityCrit
-	}
-
-	return severity
-}
-
-func CurrentHealthSeverity(checks CheckSet) Severity {
-	severity := SeverityOK
+func CurrentHealthSeverity(checks CheckSet, defaultSeverity Severity) Severity {
+	severity := defaultSeverity
 	for _, result := range checks {
 		if result.Severity > severity {
 			severity = result.Severity
