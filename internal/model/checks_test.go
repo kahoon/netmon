@@ -342,4 +342,27 @@ func TestTailscaleConnectedCheck(t *testing.T) {
 			t.Fatalf("Summary = %q, want %q", got.Summary, "Tailscale not authenticated")
 		}
 	})
+
+	t.Run("control disconnected is warning", func(t *testing.T) {
+		t.Parallel()
+
+		got := tailscaleConnectedCheck(TailscaleState{
+			Status: TailscaleStatus{
+				Running:       true,
+				Authenticated: true,
+				BackendState:  "Running",
+				SelfOnline:    false,
+			},
+			Addresses: TailscaleAddresses{IPv4: "100.64.0.1"},
+		})
+		if got.Severity != SeverityWarn {
+			t.Fatalf("Severity = %s, want %s", got.Severity, SeverityWarn)
+		}
+		if got.Summary != "Tailscale control disconnected" {
+			t.Fatalf("Summary = %q, want %q", got.Summary, "Tailscale control disconnected")
+		}
+		if got.Detail != "self_online=false; backend=Running" {
+			t.Fatalf("Detail = %q, want %q", got.Detail, "self_online=false; backend=Running")
+		}
+	})
 }

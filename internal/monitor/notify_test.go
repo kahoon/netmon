@@ -51,6 +51,9 @@ func TestBuildChangeNotificationCompactBody(t *testing.T) {
 	if got, want := lines[1], "severity: CRIT"; got != want {
 		t.Fatalf("line 2 = %q, want %q", got, want)
 	}
+	if got, want := lines[2], "changed:"; got != want {
+		t.Fatalf("line 3 = %q, want %q", got, want)
+	}
 
 	wantLines := []string{
 		"- interface operational recovered",
@@ -66,6 +69,33 @@ func TestBuildChangeNotificationCompactBody(t *testing.T) {
 	}
 	if strings.Contains(note.Body, "usable global IPv6") {
 		t.Fatalf("notification body should omit unchanged OK checks: %q", note.Body)
+	}
+}
+
+func TestBuildChangeNotificationRecoveredSeverityIgnoresUnchangedFailures(t *testing.T) {
+	t.Parallel()
+
+	cfg := config.Config{MonitorInterface: "eno1"}
+	previousChecks := makeCheckSet(
+		model.CheckResult{Key: "interface-oper", Label: "interface operational", Severity: model.SeverityCrit, Summary: "interface eno1 operstate down"},
+		model.CheckResult{Key: "pihole-dns-v4", Label: "Pi-hole DNS IPv4", Severity: model.SeverityCrit, Summary: "Pi-hole DNS over IPv4 failing"},
+	)
+	currentChecks := makeCheckSet(
+		model.CheckResult{Key: "pihole-dns-v4", Label: "Pi-hole DNS IPv4", Severity: model.SeverityCrit, Summary: "Pi-hole DNS over IPv4 failing"},
+	)
+
+	note := BuildChangeNotification(cfg, "interface poll", model.SystemState{}, model.SystemState{}, previousChecks, currentChecks)
+	if note == nil {
+		t.Fatal("BuildChangeNotification() = nil, want recovery notification")
+	}
+	if got, want := note.Severity, model.SeverityInfo; got != want {
+		t.Fatalf("Severity = %s, want %s", got, want)
+	}
+	if got, want := note.Summary, "interface operational recovered"; got != want {
+		t.Fatalf("Summary = %q, want %q", got, want)
+	}
+	if !strings.Contains(note.Body, "severity: INFO") {
+		t.Fatalf("Body = %q, want INFO severity", note.Body)
 	}
 }
 
@@ -108,6 +138,9 @@ func TestBuildCollectionFailureNotification(t *testing.T) {
 	}
 	if !strings.Contains(note.Body, "reason: startup collection") {
 		t.Fatalf("Body = %q, want startup collection reason", note.Body)
+	}
+	if !strings.Contains(note.Body, "collection failures:") {
+		t.Fatalf("Body = %q, want collection failures section", note.Body)
 	}
 	if !strings.Contains(note.Body, "- Pi-hole API authentication failed") {
 		t.Fatalf("Body = %q, want collection failure summary", note.Body)

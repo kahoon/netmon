@@ -122,11 +122,11 @@ func BuildChangeNotification(cfg config.Config, reason string, previous, current
 		return nil
 	}
 
-	severity := model.CurrentHealthSeverity(currentChecks, model.SeverityInfo)
+	severity := changedSeverity(previousChecks, currentChecks)
 	bodyLines := []string{
 		"reason: " + reason,
 		"severity: " + severity.String(),
-		"collection failures:",
+		"changed:",
 	}
 	for _, line := range lines {
 		bodyLines = append(bodyLines, "- "+line)
@@ -159,7 +159,7 @@ func BuildCollectionFailureNotification(cfg config.Config, reason string, checks
 	bodyLines := []string{
 		"reason: " + reason,
 		"severity: " + severity.String(),
-		"changed:",
+		"collection failures:",
 	}
 	for _, line := range lines {
 		bodyLines = append(bodyLines, "- "+line)
@@ -192,6 +192,31 @@ func changedCheckLines(previousChecks, currentChecks model.CheckSet) []string {
 	}
 
 	return lines
+}
+
+func changedSeverity(previousChecks, currentChecks model.CheckSet) model.Severity {
+	severity := model.SeverityInfo
+	externalDNSChangedToFailure := false
+
+	for _, key := range model.CheckOrder() {
+		prev := previousChecks[key]
+		curr := currentChecks[key]
+		if prev.Equal(curr) || curr.Severity == model.SeverityOK {
+			continue
+		}
+		if curr.Severity > severity {
+			severity = curr.Severity
+		}
+		if model.IsExternalDNSCheck(key) {
+			externalDNSChangedToFailure = true
+		}
+	}
+
+	if externalDNSChangedToFailure && model.HasDualExternalDNSFailure(currentChecks) {
+		return model.SeverityCrit
+	}
+
+	return severity
 }
 
 func publicIPv4ChangeLine(previous, current model.PublicIPObservation) string {

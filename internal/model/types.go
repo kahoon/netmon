@@ -391,6 +391,7 @@ type TailscaleStatus struct {
 	BackendState   string
 	Authenticated  bool
 	Connected      bool
+	SelfOnline     bool
 	Version        string
 	HostName       string
 	DNSName        string

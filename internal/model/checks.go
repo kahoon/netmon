@@ -92,9 +92,7 @@ func CurrentHealthSeverity(checks CheckSet, defaultSeverity Severity) Severity {
 		}
 	}
 
-	if severity < SeverityCrit &&
-		checks[checkExternalDNSV4].Severity >= SeverityWarn &&
-		checks[checkExternalDNSV6].Severity >= SeverityWarn {
+	if severity < SeverityCrit && HasDualExternalDNSFailure(checks) {
 		return SeverityCrit
 	}
 
@@ -103,6 +101,15 @@ func CurrentHealthSeverity(checks CheckSet, defaultSeverity Severity) Severity {
 
 func CheckOrder() []string {
 	return append([]string{}, checkOrder...)
+}
+
+func IsExternalDNSCheck(key string) bool {
+	return key == checkExternalDNSV4 || key == checkExternalDNSV6
+}
+
+func HasDualExternalDNSFailure(checks CheckSet) bool {
+	return checks[checkExternalDNSV4].Severity >= SeverityWarn &&
+		checks[checkExternalDNSV6].Severity >= SeverityWarn
 }
 
 func CollectionFailures(checks CheckSet) []CheckResult {
@@ -442,6 +449,11 @@ func tailscaleConnectedCheck(state TailscaleState) CheckResult {
 		return check
 	}
 
+	controlDisconnected := !state.Status.SelfOnline &&
+		state.Status.Running &&
+		state.Status.Authenticated &&
+		(state.Addresses.IPv4 != "" || state.Addresses.IPv6 != "")
+
 	check.Severity = SeverityCrit
 	switch {
 	case state.Status.Detail != "" && state.Status.BackendState == "":
@@ -453,11 +465,15 @@ func tailscaleConnectedCheck(state TailscaleState) CheckResult {
 		check.Summary = "Tailscale not authenticated"
 	case state.Addresses.IPv4 == "" && state.Addresses.IPv6 == "":
 		check.Summary = "Tailscale has no assigned address"
-	default:
-		check.Summary = "Tailscale disconnected"
+	case controlDisconnected:
+		check.Severity = SeverityWarn
+		check.Summary = "Tailscale control disconnected"
 	}
 
 	var detail []string
+	if controlDisconnected {
+		detail = append(detail, "self_online=false")
+	}
 	if state.Status.BackendState != "" {
 		detail = append(detail, "backend="+state.Status.BackendState)
 	}
